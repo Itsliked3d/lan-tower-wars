@@ -214,13 +214,14 @@ function unitPoint(unit: { x?: number; y?: number; position: number }): GridPoin
   };
 }
 
-function spawnPointFor(target: Player): GridPoint {
+function spawnPointFor(target: Player, reservedRows = new Set<number>()): GridPoint {
   const occupiedEntryRows = new Set(
     (target.laneUnits ?? [])
       .map(unitPoint)
       .filter((point) => point.x === 0)
       .map((point) => point.y),
   );
+  for (const row of reservedRows) occupiedEntryRows.add(row);
   const preferredY = (target.laneUnits ?? []).length % GRID_HEIGHT;
   for (let offset = 0; offset < GRID_HEIGHT; offset += 1) {
     const y = (preferredY + offset) % GRID_HEIGHT;
@@ -640,6 +641,13 @@ export const sendUnit = mutation({
     const target = normalizePlayer(game.players[targetIndex]);
     const config = UNIT_CONFIG[args.unitType];
     if (!config) throw new Error("Unknown unit type.");
+    if (args.unitType === "wraith_lord" && game.players.some((candidate) =>
+      normalizePlayer(candidate).laneUnits.some((unit) =>
+        unit.ownerId === player.userId && unit.type === "wraith_lord" && unit.hp > 0,
+      ),
+    )) {
+      throw new Error("Only one Wraith Lord may be alive at a time.");
+    }
     const charge = unitCharges.find((entry) => entry.type === args.unitType);
     if (!charge || charge.charges <= 0) {
       throw new Error(`${config.label} is recharging. Try again soon.`);
@@ -660,6 +668,7 @@ export const sendUnit = mutation({
     const unit = {
       id: createId(args.unitType),
       type: args.unitType,
+      ownerId: player.userId,
       position: 0,
       hp: config.hp,
       x: spawn.x,
@@ -718,8 +727,15 @@ export const tick = mutation({
     let leakMessage = "";
 
     const botPendingUnits: Array<Record<string, unknown>> = [];
+    const routedUnits: Array<{ targetIndex: number; unit: Record<string, unknown> }> = [];
+    const stolenHealthByOwner = new Map<string, number>();
+    const reservedTransferRows = new Map<number, Set<number>>();
+    const nextLivingPlayerIndex = (sourceIndex: number) =>
+      Array.from({ length: game.players.length - 1 }, (_, offset) =>
+        (sourceIndex + offset + 1) % game.players.length,
+      ).find((candidateIndex) => game.players[candidateIndex].health > 0);
 
-    const players = game.players.map((player) => {
+    const players = game.players.map((player, playerIndex) => {
       const state = normalizePlayer(player);
       const refreshedUnitCharges = rechargeUnitCharges(state.unitCharges, now);
       const isBot = String(player.userId).startsWith("bot-");
@@ -761,6 +777,7 @@ export const tick = mutation({
               botPendingUnits.push({
                 id: createId(pick),
                 type: pick,
+                ownerId: player.userId,
                 position: 0,
                 hp: cfg.hp,
                 x: spawn.x,
@@ -902,7 +919,49 @@ export const tick = mutation({
       const leaked = movedUnits.filter((unit) => unit.x === GRID_WIDTH - 1 && unit.hp > 0);
       if (leaked.length > 0) {
         const damage = leaked.reduce((total, unit) => total + (UNIT_CONFIG[unit.type]?.damage ?? 5), 0);
-        leakMessage = `${state.name} lost ${damage} integrity.`;
+        leakMessage = `${state.name} lost ${damage} integrity. The attackers continue to the next lane.`;
+
+        // Lanes form a gameplay loop: a surviving unit is re-spawned at the
+        // next living player's entry and keeps its remaining HP and owner.
+        const nextTargetIndex = nextLivingPlayerIndex(playerIndex);
+        if (nextTargetIndex !== undefined) {
+          const nextTarget = normalizePlayer(game.players[nextTargetIndex]);
+          const reservedRows = reservedTransferRows.get(nextTargetIndex) ?? new Set<number>();
+          reservedTransferRows.set(nextTargetIndex, reservedRows);
+          for (const unit of leaked) {
+            const spawn = spawnPointFor(nextTarget, reservedRows);
+            reservedRows.add(spawn.y);
+            const route = unit.flying
+              ? flyingPathFor(spawn.y)
+              : findPath(nextTarget.towers, spawn);
+            if (!route) continue;
+            routedUnits.push({
+              targetIndex: nextTargetIndex,
+              unit: {
+                ...unit,
+                position: 0,
+                x: spawn.x,
+                y: spawn.y,
+                path: route,
+                pathIndex: 0,
+                pathProgress: 0,
+              },
+            });
+          }
+        }
+
+        // A living sender steals back the integrity dealt by their units.
+        // Eliminated players stay eliminated; healing never resurrects them.
+        for (const unit of leaked) {
+          if (!unit.ownerId) continue;
+          const owner = game.players.find((candidate) => candidate.userId === unit.ownerId);
+          if (!owner || owner.health <= 0) continue;
+          const unitDamage = UNIT_CONFIG[unit.type]?.damage ?? 5;
+          stolenHealthByOwner.set(
+            String(unit.ownerId),
+            (stolenHealthByOwner.get(String(unit.ownerId)) ?? 0) + unitDamage,
+          );
+        }
       }
 
       const killedUnits = movedUnits.filter((unit) => unit.hp <= 0);
@@ -925,16 +984,26 @@ export const tick = mutation({
       };
     });
 
-    // Inject bot's pending units into the human player's lane
+    // Apply life steal and inject both practice-bot units and circularly routed units.
     const finalPlayers = players.map((p, idx) => {
-      if (idx === 0 && game.isPractice && botPendingUnits.length > 0) {
-        return {
-          ...p,
-          laneUnits: [...(p.laneUnits ?? []), ...botPendingUnits] as typeof p.laneUnits,
-          incoming: (p.incoming ?? 0) + botPendingUnits.length,
-        };
-      }
-      return p;
+      const stolenHealth = stolenHealthByOwner.get(String(p.userId)) ?? 0;
+      const botUnits = idx === 0 && game.isPractice ? botPendingUnits : [];
+      const loopedUnits = routedUnits
+        .filter((transfer) => transfer.targetIndex === idx)
+        .map((transfer) => transfer.unit);
+      const additions = [...botUnits, ...loopedUnits];
+      return {
+        ...p,
+        health: stolenHealth > 0 && p.health > 0
+          ? Math.min(100, p.health + stolenHealth)
+          : p.health,
+        ...(additions.length > 0
+          ? {
+              laneUnits: [...(p.laneUnits ?? []), ...additions] as typeof p.laneUnits,
+              incoming: (p.laneUnits ?? []).length + additions.length,
+            }
+          : {}),
+      };
     });
 
     const survivors = finalPlayers.filter((p) => p.health > 0);
