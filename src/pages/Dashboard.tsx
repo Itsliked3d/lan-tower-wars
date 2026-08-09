@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useMutation, useQuery } from "convex/react";
-import { Bird, Castle, Coins, Crosshair, Crown, Flame, Footprints, Ghost, Hammer, HelpCircle, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, Trash2, TrendingUp, Turtle, Users, Zap } from "lucide-react";
+import { Bird, Castle, Coins, Crosshair, Crown, Flame, Footprints, Ghost, Hammer, HelpCircle, LogOut, Radar, Radio, Ruler, Shield, Skull, Snowflake, Sparkles, Swords, Target, Trash2, TrendingUp, Turtle, Users, Wand, Zap } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -36,11 +36,11 @@ const TOWER_INFO: Record<TowerType, { short: string; cost: number; range: string
   slow: { short: "Snare", cost: 30, range: "r2 · 3dps · slow", icon: Ruler },
 };
 
-const MAGE_ELEMENT_INFO: Record<MageElement, { label: string; counter: string; icon: typeof Flame; text: string; border: string; background: string }> = {
-  fire: { label: "Fire", counter: "breaks splash resist", icon: Flame, text: "text-orange-200", border: "border-orange-300/40", background: "bg-orange-300/10" },
-  frost: { label: "Frost", counter: "checks fast units", icon: Ruler, text: "text-sky-200", border: "border-sky-300/40", background: "bg-sky-300/10" },
-  storm: { label: "Storm", counter: "hunts flyers", icon: Zap, text: "text-yellow-200", border: "border-yellow-300/40", background: "bg-yellow-300/10" },
-  void: { label: "Void", counter: "pierces heavy resist", icon: Sparkles, text: "text-fuchsia-200", border: "border-fuchsia-300/40", background: "bg-fuchsia-300/10" },
+const MAGE_ELEMENT_INFO: Record<MageElement, { label: string; counter: string; icon: typeof Flame; text: string; border: string; background: string; glow: string }> = {
+  fire: { label: "Fire", counter: "breaks splash resist", icon: Flame, text: "text-orange-200", border: "border-orange-300/40", background: "bg-orange-300/10", glow: "shadow-[0_0_10px_2px_rgba(251,146,60,0.35)]" },
+  frost: { label: "Frost", counter: "checks fast units", icon: Snowflake, text: "text-sky-200", border: "border-sky-300/40", background: "bg-sky-300/10", glow: "shadow-[0_0_10px_2px_rgba(56,189,248,0.35)]" },
+  storm: { label: "Storm", counter: "hunts flyers", icon: Zap, text: "text-yellow-200", border: "border-yellow-300/40", background: "bg-yellow-300/10", glow: "shadow-[0_0_10px_2px_rgba(250,204,21,0.35)]" },
+  void: { label: "Void", counter: "pierces heavy resist", icon: Wand, text: "text-fuchsia-200", border: "border-fuchsia-300/40", background: "bg-fuchsia-300/10", glow: "shadow-[0_0_10px_2px_rgba(217,70,239,0.35)]" },
 };
 
 const UNIT_INFO: Record<UnitType, { short: string; cost: number; hp: number; income: number; tier: string; icon: typeof Footprints; flying?: boolean; resistance?: string }> = {
@@ -196,14 +196,14 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
           role={canBuild || tower ? "button" : undefined}
           tabIndex={canBuild || tower ? 0 : -1}
           onClick={() => { if (canBuild) onCellClick?.(x, y); if (tower && onTowerClick) onTowerClick(tower.id); }}
-          className={`relative border-r border-b border-white/[0.04] transition-colors ${isStart ? "bg-cyan-300/[0.05]" : isGoal ? "bg-rose-300/[0.05]" : route.has(cellKey) ? "bg-emerald-300/[0.02]" : ""} ${canBuild ? "cursor-crosshair hover:bg-cyan-300/20" : ""} ${tower && onTowerClick ? "cursor-pointer hover:brightness-125" : ""} ${tower && tower.id === selectedTowerId ? "ring-1 ring-cyan-300/60" : ""}`}
+          className={`relative border-r border-b border-white/[0.04] transition-colors ${isStart ? "bg-cyan-300/[0.05]" : isGoal ? "bg-rose-300/[0.05]" : route.has(cellKey) ? "bg-emerald-300/[0.02]" : ""} ${canBuild ? "cursor-crosshair hover:bg-cyan-300/20" : ""} ${tower && onTowerClick ? "cursor-pointer hover:brightness-125" : ""} ${tower && tower.id === selectedTowerId ? "ring-1 ring-cyan-300/60" : ""} ${tower && tower.type === "splash" ? MAGE_ELEMENT_INFO[mageElementFor(tower)].glow : ""}`}
           title={canBuild ? `Place ${selectedTowerType ? TOWER_INFO[selectedTowerType].short : "tower"}${selectedTowerType === "splash" ? ` · ${MAGE_ELEMENT_INFO[selectedMageElement ?? "fire"].label}` : ""} at ${x + 1}/${y + 1}` : tower ? `${towerInfoFor(tower.type).short}${tower.type === "splash" ? ` · ${MAGE_ELEMENT_INFO[mageElementFor(tower)].label}` : ""}${(tower.upgradeLevel ?? 0) > 0 ? ` LV.${tower.upgradeLevel}` : ""} — click to upgrade` : undefined}
         >
           {isStart && !compact && <span className="absolute left-0.5 top-0.5 text-[7px] font-mono text-cyan-200/50">IN</span>}
           {isGoal && !compact && <span className="absolute right-0.5 top-0.5 text-[7px] font-mono text-rose-200/50">GOAL</span>}
           {tower && (
             <div className={`flex size-full items-center justify-center ${tower.type === "close" ? "text-cyan-200/90" : tower.type === "far" ? "text-violet-200/90" : tower.type === "splash" ? MAGE_ELEMENT_INFO[mageElementFor(tower)].text : "text-emerald-200/90"}`}>
-              {React.createElement(towerInfoFor(tower.type).icon, { className: compact ? "size-3" : "size-4" })}
+              {React.createElement(tower.type === "splash" ? MAGE_ELEMENT_INFO[mageElementFor(tower)].icon : towerInfoFor(tower.type).icon, { className: compact ? "size-3" : "size-4" })}
               {!compact && (tower.upgradeLevel ?? 0) > 0 && <span className="absolute -bottom-0.5 text-[6px] font-mono text-cyan-300/80">L{tower.upgradeLevel}</span>}
             </div>
           )}
@@ -256,7 +256,7 @@ function TowerUpgradeModal({ tower, player, onUpgrade, onRemove, onClose, isBusy
       <div className="modal-pop w-80 rounded-2xl border border-white/10 bg-[#0f1729] p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            {React.createElement(info.icon, { className: "size-4 text-cyan-200" })}
+            {React.createElement(mageElement ? MAGE_ELEMENT_INFO[mageElement].icon : info.icon, { className: `size-4 ${mageElement ? MAGE_ELEMENT_INFO[mageElement].text : "text-cyan-200"}` })}
             <span className="text-sm font-semibold text-white">{info.short}</span>
             <span className="font-mono text-[10px] text-cyan-300">LV.{level}</span>
           </div>
