@@ -90,7 +90,11 @@ function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: stri
 function EconomyPill({ player, compact }: { player: Player; compact?: boolean }) {
   const gold = goldOf(player);
   const income = incomeOf(player);
-  if (compact) return <span className="font-mono text-xs text-amber-200"><Coins className="mr-1 inline size-3" />{gold}</span>;
+  if (compact) return <div className="flex items-center gap-2 rounded-lg border border-white/8 bg-white/[0.02] px-2 py-1 font-mono text-[11px]">
+    <span className="flex items-center gap-1 text-amber-200" title="Current gold balance"><Coins className="size-3" />{gold}</span>
+    <span className="h-3 w-px bg-white/10" />
+    <span className="text-emerald-300" title="Income generated per second">+{income}/s</span>
+  </div>;
   return <div className="flex items-center gap-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.05] px-3 py-2">
     <div className="flex items-center gap-1.5 text-amber-200"><Coins className="size-3.5" /><span className="font-mono text-sm font-semibold">{gold}</span></div>
     <div className="h-4 w-px bg-white/10" />
@@ -437,10 +441,11 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, on
         </CardHeader>
         <CardContent className="pt-3 space-y-3">
           <GridLane player={player} selectedTowerType={selectedTowerType} onCellClick={(x, y) => onBuild(selectedTowerType, x, y)} onTowerClick={(id) => setSelectedTowerId(id === selectedTowerId ? null : id)} selectedTowerId={selectedTowerId} />
-          <div className="grid grid-cols-3 gap-1.5 text-center">
+          <div className="grid grid-cols-2 gap-1.5 text-center sm:grid-cols-4">
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-white">{player.health}</p><p className="text-[8px] text-slate-600">integrity</p></div>
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-cyan-100">{myTowers.length}</p><p className="text-[8px] text-slate-600">walls</p></div>
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-amber-100">{unitsOf(player).length}</p><p className="text-[8px] text-slate-600">units</p></div>
+            <div className="rounded-lg border border-emerald-300/10 bg-emerald-300/[0.03] p-2"><p className="font-mono text-sm text-emerald-200">+{incomeOf(player)}</p><p className="text-[8px] text-slate-600">income / sec</p></div>
           </div>
         </CardContent>
       </Card>
