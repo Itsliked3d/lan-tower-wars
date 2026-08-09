@@ -18,6 +18,7 @@ const STARTING_GOLD = 200;
 const BASE_INCOME = 30;
 const INCOME_INTERVAL_MS = 15_000;
 const KILL_REWARD_RATE = 0.2;
+const INCOME_RATE_BY_TIER = { budget: 0.2, mid: 0.1, endgame: 0.05 } as const;
 const ATTACK_DELAY_MS = 30_000;
 const GRID_WIDTH = 18;
 const GRID_HEIGHT = 10;
@@ -41,6 +42,10 @@ type UnitConfig = {
   rechargeMs: number;
   flying?: boolean;
   resistance?: "splash" | "slow" | "physical" | "all";
+  auraRadius?: number;
+  auraSpeedMultiplier?: number;
+  straightLine?: boolean;
+  towerBreaker?: boolean;
 };
 
 const UNIT_CONFIG: Record<string, UnitConfig> = {
@@ -51,18 +56,23 @@ const UNIT_CONFIG: Record<string, UnitConfig> = {
   grunt: { label: "Grunt", cost: 25, income: 5, hp: 30, speed: 0.8, damage: 12, tier: "budget", maxCharges: 18, rechargeMs: 8_000, resistance: "splash" },
   slinger: { label: "Slinger", cost: 35, income: 7, hp: 10, speed: 1.2, damage: 10, tier: "budget", maxCharges: 12, rechargeMs: 10_000, flying: true },
   // ── Mid-game ──
-  brute: { label: "Brute", cost: 120, income: 24, hp: 200, speed: 0.5, damage: 40, tier: "mid", maxCharges: 10, rechargeMs: 14_000 },
-  raider: { label: "Raider", cost: 250, income: 50, hp: 80, speed: 2.0, damage: 25, tier: "mid", maxCharges: 8, rechargeMs: 16_000, resistance: "slow" },
-  juggernaut: { label: "Juggernaut", cost: 500, income: 100, hp: 500, speed: 0.35, damage: 65, tier: "mid", maxCharges: 6, rechargeMs: 22_000, resistance: "all" },
-  phantom: { label: "Phantom", cost: 350, income: 70, hp: 40, speed: 3.0, damage: 30, tier: "mid", maxCharges: 3, rechargeMs: 24_000, flying: true },
+  brute: { label: "Brute", cost: 120, income: 12, hp: 200, speed: 0.5, damage: 40, tier: "mid", maxCharges: 10, rechargeMs: 14_000 },
+  raider: { label: "Raider", cost: 250, income: 25, hp: 80, speed: 2.0, damage: 25, tier: "mid", maxCharges: 8, rechargeMs: 16_000, resistance: "slow" },
+  juggernaut: { label: "Juggernaut", cost: 500, income: 50, hp: 500, speed: 0.35, damage: 65, tier: "mid", maxCharges: 6, rechargeMs: 22_000, resistance: "all" },
+  phantom: { label: "Phantom", cost: 350, income: 35, hp: 40, speed: 3.0, damage: 30, tier: "mid", maxCharges: 3, rechargeMs: 24_000, flying: true },
+  aura: { label: "Aura Warden", cost: 750, income: 75, hp: 180, speed: 0.65, damage: 12, tier: "mid", maxCharges: 4, rechargeMs: 28_000, auraRadius: 2, auraSpeedMultiplier: 1.25, resistance: "slow" },
   // ── Endgame ──
-  siege_breaker: { label: "Siege Breaker", cost: 2000, income: 400, hp: 1200, speed: 0.3, damage: 120, tier: "endgame", maxCharges: 2, rechargeMs: 30_000 },
-  leviathan: { label: "Leviathan", cost: 5000, income: 1000, hp: 3000, speed: 0.2, damage: 200, tier: "endgame", maxCharges: 2, rechargeMs: 42_000, resistance: "splash" },
-  wraith_lord: { label: "Wraith Lord", cost: 8000, income: 800, hp: 300, speed: 1.8, damage: 55, tier: "endgame", maxCharges: 1, rechargeMs: 60_000, flying: true, resistance: "physical" },
-  titan: { label: "Titan", cost: 20000, income: 4000, hp: 8000, speed: 0.15, damage: 400, tier: "endgame", maxCharges: 1, rechargeMs: 55_000, resistance: "all" },
-  doomsday: { label: "Doomsday", cost: 50000, income: 10000, hp: 15000, speed: 0.1, damage: 800, tier: "endgame", maxCharges: 1, rechargeMs: 75_000 },
-
+  siege_breaker: { label: "Siege Breaker", cost: 2000, income: 100, hp: 1200, speed: 0.3, damage: 120, tier: "endgame", maxCharges: 2, rechargeMs: 30_000 },
+  leviathan: { label: "Leviathan", cost: 5000, income: 250, hp: 3000, speed: 0.2, damage: 200, tier: "endgame", maxCharges: 2, rechargeMs: 42_000, resistance: "splash" },
+  wraith_lord: { label: "Wraith Lord", cost: 8000, income: 400, hp: 300, speed: 1.8, damage: 55, tier: "endgame", maxCharges: 1, rechargeMs: 60_000, flying: true, resistance: "physical" },
+  siege_tank: { label: "Siege Tank", cost: 12000, income: 600, hp: 6500, speed: 0.12, damage: 260, tier: "endgame", maxCharges: 1, rechargeMs: 75_000, straightLine: true, towerBreaker: true, resistance: "all" },
+  titan: { label: "Titan", cost: 20000, income: 1000, hp: 8000, speed: 0.15, damage: 400, tier: "endgame", maxCharges: 1, rechargeMs: 55_000, resistance: "all" },
+  doomsday: { label: "Doomsday", cost: 50000, income: 2500, hp: 15000, speed: 0.1, damage: 800, tier: "endgame", maxCharges: 1, rechargeMs: 75_000 },
 } as const;
+
+function incomeForUnit(config: UnitConfig) {
+  return Math.max(1, Math.floor(config.cost * INCOME_RATE_BY_TIER[config.tier]));
+}
 
 const MAGE_ELEMENT_CONFIG: Record<MageElement, { label: string; damageMultiplier: number }> = {
   fire: { label: "Fire", damageMultiplier: 1 },
@@ -501,7 +511,7 @@ export const buildTower = mutation({
       throw new Error("That tower would seal the route. Leave at least one path to the goal.");
     }
     // Only check non-flying units for stranding
-    if (player.laneUnits.some((unit) => !(unit.flying) && !findPath(proposedTowers, unitPoint(unit)))) {
+    if (player.laneUnits.some((unit) => !(unit.flying || unit.straightLine) && !findPath(proposedTowers, unitPoint(unit)))) {
       throw new Error("That tower would strand a ground unit already on the lane.");
     }
 
@@ -662,9 +672,11 @@ const ALL_SENDABLE_UNITS = v.union(
   v.literal("raider"),
   v.literal("juggernaut"),
   v.literal("phantom"),
+  v.literal("aura"),
   v.literal("siege_breaker"),
   v.literal("leviathan"),
   v.literal("wraith_lord"),
+  v.literal("siege_tank"),
   v.literal("titan"),
   v.literal("doomsday"),
 );
@@ -714,7 +726,7 @@ export const sendUnit = mutation({
     // Each unit enters through a different open tile in the first column.
     // Flying units keep a straight line on their own spawn row.
     let path: GridPoint[] | null;
-    if (config.flying) {
+    if (config.flying || config.straightLine) {
       path = flyingPathFor(spawn.y);
     } else {
       path = findPath(target.towers, spawn);
@@ -734,13 +746,15 @@ export const sendUnit = mutation({
       pathProgress: 0,
       flying: config.flying ?? false,
       resistance: config.resistance,
+      straightLine: config.straightLine ?? false,
+      towerBreaker: config.towerBreaker ?? false,
     };
     const players = game.players.map((current, currentIndex) => {
       if (currentIndex === index) {
         return {
           ...player,
           gold: player.gold - config.cost,
-          income: player.income + config.income,
+          income: player.income + incomeForUnit(config),
           unitCharges: consumeUnitCharge(unitCharges, args.unitType, now),
           sent: player.sent + 1,
         };
@@ -784,6 +798,7 @@ export const tick = mutation({
 
     const botPendingUnits: Array<Record<string, unknown>> = [];
     const routedUnits: Array<{ targetIndex: number; unit: Record<string, unknown> }> = [];
+    let siegeMessage = "";
     const stolenHealthByOwner = new Map<string, number>();
     const reservedTransferRows = new Map<number, Set<number>>();
     const nextLivingPlayerIndex = (sourceIndex: number) =>
@@ -824,10 +839,10 @@ export const tick = mutation({
             const humanPlayer = game.players[0];
             const humanState = normalizePlayer(humanPlayer);
             const spawn = spawnPointFor(humanState);
-            const route = cfg.flying ? flyingPathFor(spawn.y) : findPath(humanState.towers, spawn);
+            const route = cfg.flying || cfg.straightLine ? flyingPathFor(spawn.y) : findPath(humanState.towers, spawn);
             if (route) {
               botGold -= cfg.cost;
-              botIncome += cfg.income;
+              botIncome += incomeForUnit(cfg);
               botSent += 1;
               botUnitCharges = consumeUnitCharge(botUnitCharges, pick, now);
               botPendingUnits.push({
@@ -843,13 +858,16 @@ export const tick = mutation({
                 pathProgress: 0,
                 flying: cfg.flying ?? false,
                 resistance: cfg.resistance,
+                auraRadius: cfg.auraRadius,
+                straightLine: cfg.straightLine ?? false,
+                towerBreaker: cfg.towerBreaker ?? false,
               });
             }
           }
         }
       }
 
-      const currentTowers = isBot ? botTowers : state.towers;
+      let currentTowers = isBot ? botTowers : state.towers;
       const groundPathCache = new Map<string, GridPoint[] | null>();
       const groundPathFor = (start: GridPoint) => {
         const key = pointKey(start);
@@ -857,15 +875,33 @@ export const tick = mutation({
         return groundPathCache.get(key) ?? null;
       };
 
+      const auraUnits = state.laneUnits.filter((unit) => {
+        const config = UNIT_CONFIG[unit.type];
+        return unit.hp > 0 && Boolean(config?.auraRadius) && Boolean(unit.ownerId);
+      });
       const movedUnits = state.laneUnits.map((unit) => {
         const start = unitPoint(unit);
-        const path = unit.flying ? flyingPathFor(start.y) : groundPathFor(start);
+        const path = unit.flying || unit.straightLine ? flyingPathFor(start.y) : groundPathFor(start);
         if (!path) return { ...unit, x: start.x, y: start.y };
+
+        // Aura Wardens accelerate nearby units from the same sender. The
+        // ownership check keeps an enemy aura from buffing your attackers.
+        const auraBoost = auraUnits
+          .filter((aura) => aura.ownerId === unit.ownerId && aura.id !== unit.id)
+          .some((aura) => {
+            const auraConfig = UNIT_CONFIG[aura.type];
+            const auraPoint = unitPoint(aura);
+            const distance = Math.abs(start.x - auraPoint.x) + Math.abs(start.y - auraPoint.y);
+            return distance <= (auraConfig?.auraRadius ?? 0);
+          });
+        const speedMultiplier = auraBoost
+          ? (UNIT_CONFIG[auraUnits.find((aura) => aura.ownerId === unit.ownerId)?.type ?? "soldier"]?.auraSpeedMultiplier ?? 1.25)
+          : 1;
 
         // Flying units use a stable origin-to-goal path and keep cumulative
         // progress. Ground units recalculate from their current cell.
-        let pathIndex = unit.flying ? (unit.pathIndex ?? 0) : 0;
-        let pathProgress = (unit.pathProgress ?? 0) + (UNIT_CONFIG[unit.type]?.speed ?? 1) * elapsed;
+        let pathIndex = unit.flying || unit.straightLine ? (unit.pathIndex ?? 0) : 0;
+        let pathProgress = (unit.pathProgress ?? 0) + (UNIT_CONFIG[unit.type]?.speed ?? 1) * speedMultiplier * elapsed;
         while (pathIndex < path.length - 1 && pathProgress >= 1) {
           pathIndex += 1;
           pathProgress -= 1;
@@ -881,6 +917,28 @@ export const tick = mutation({
           pathProgress,
         };
       });
+
+      // Siege Tanks ignore blockers and erase towers on their row as they
+      // reach them. They are intentionally slow, but force a maze to adapt.
+      const siegeUnits = movedUnits.filter((unit) =>
+        unit.hp > 0 &&
+        UNIT_CONFIG[unit.type]?.towerBreaker &&
+        String(unit.ownerId) !== String(state.userId),
+      );
+      if (siegeUnits.length > 0) {
+        const beforeCount = currentTowers.length;
+        currentTowers = currentTowers.filter((tower) => {
+          const towerLocation = towerPoint(tower);
+          return !siegeUnits.some((unit) => {
+            const unitLocation = unitPoint(unit);
+            return towerLocation.y === unitLocation.y && towerLocation.x >= unitLocation.x && towerLocation.x <= unitLocation.x + 1;
+          });
+        });
+        const destroyedCount = beforeCount - currentTowers.length;
+        if (destroyedCount > 0) {
+          siegeMessage = `${state.name}'s defense lost ${destroyedCount} tower${destroyedCount === 1 ? "" : "s"} to a Siege Tank.`;
+        }
+      }
 
       const nextProjectiles: ProjectileLike[] = [];
       for (const projectile of (state.projectiles ?? []) as ProjectileLike[]) {
@@ -991,7 +1049,7 @@ export const tick = mutation({
           for (const unit of leaked) {
             const spawn = spawnPointFor(nextTarget, reservedRows);
             reservedRows.add(spawn.y);
-            const route = unit.flying
+            const route = unit.flying || unit.straightLine
               ? flyingPathFor(spawn.y)
               : findPath(nextTarget.towers, spawn);
             if (!route) continue;
@@ -1040,7 +1098,7 @@ export const tick = mutation({
         health: Math.max(0, state.health - hostileLeaked.reduce((total, unit) => total + playerDamageForUnit(unit), 0)),
         laneUnits: remainingUnits,
         incoming: remainingUnits.length,
-        towers: isBot ? botTowers : state.towers,
+        towers: currentTowers,
         sent: isBot ? botSent : state.sent,
         projectiles: nextProjectiles,
       };
@@ -1077,7 +1135,7 @@ export const tick = mutation({
       players: finalPlayers,
       lastTick: now,
       status: "playing",
-      lastAction: matchComplete ? winnerMessage : leakMessage || game.lastAction,
+      lastAction: matchComplete ? winnerMessage : siegeMessage || leakMessage || game.lastAction,
       updatedAt: now,
     });
   },

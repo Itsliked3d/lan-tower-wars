@@ -25,9 +25,11 @@ const unitTypeValidator = v.union(
   v.literal("raider"),
   v.literal("juggernaut"),
   v.literal("phantom"),
+  v.literal("aura"),
   v.literal("siege_breaker"),
   v.literal("leviathan"),
   v.literal("wraith_lord"),
+  v.literal("siege_tank"),
   v.literal("titan"),
   v.literal("doomsday"),
 );
@@ -76,6 +78,8 @@ const laneUnitValidator = v.object({
   pathIndex: v.optional(v.number()),
   pathProgress: v.optional(v.number()),
   flying: v.optional(v.boolean()),
+  straightLine: v.optional(v.boolean()),
+  towerBreaker: v.optional(v.boolean()),
   resistance: v.optional(v.union(v.literal("splash"), v.literal("slow"), v.literal("physical"), v.literal("all"))),
 });
 

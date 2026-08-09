@@ -13,7 +13,7 @@ type Game = Doc<"games">;
 type Player = Game["players"][number];
 type TowerType = "close" | "far" | "splash" | "slow";
 type MageElement = "fire" | "frost" | "storm" | "void";
-type UnitType = "soldier" | "scout" | "runner" | "grunt" | "slinger" | "brute" | "raider" | "juggernaut" | "phantom" | "siege_breaker" | "leviathan" | "wraith_lord" | "titan" | "doomsday";
+type UnitType = "soldier" | "scout" | "runner" | "grunt" | "slinger" | "brute" | "raider" | "juggernaut" | "phantom" | "aura" | "siege_breaker" | "leviathan" | "wraith_lord" | "siege_tank" | "titan" | "doomsday";
 
 type GridPoint = { x: number; y: number };
 type Projectile = NonNullable<Player["projectiles"]>[number];
@@ -45,21 +45,23 @@ const MAGE_ELEMENT_INFO: Record<MageElement, { label: string; counter: string; i
   void: { label: "Void", counter: "pierces heavy resist", icon: Wand, text: "text-fuchsia-200", border: "border-fuchsia-300/40", background: "bg-fuchsia-300/10", glow: "shadow-[0_0_10px_2px_rgba(217,70,239,0.35)]" },
 };
 
-const UNIT_INFO: Record<UnitType, { short: string; cost: number; hp: number; income: number; tier: string; maxCharges: number; rechargeSeconds: number; icon: typeof Footprints; flying?: boolean; resistance?: string }> = {
+const UNIT_INFO: Record<UnitType, { short: string; cost: number; hp: number; income: number; tier: string; maxCharges: number; rechargeSeconds: number; icon: typeof Footprints; flying?: boolean; resistance?: string; aura?: boolean; straightLine?: boolean; towerBreaker?: boolean }> = {
   soldier: { short: "Foot Soldier", cost: 5, hp: 14, income: 1, tier: "budget", maxCharges: 50, rechargeSeconds: 2, icon: Footprints },
   scout: { short: "Scout", cost: 8, hp: 8, income: 1, tier: "budget", maxCharges: 35, rechargeSeconds: 4, icon: Zap },
   runner: { short: "Runner", cost: 12, hp: 6, income: 2, tier: "budget", maxCharges: 25, rechargeSeconds: 5, icon: Bird },
   grunt: { short: "Grunt", cost: 25, hp: 30, income: 5, tier: "budget", maxCharges: 18, rechargeSeconds: 8, icon: Shield, resistance: "splash" },
   slinger: { short: "Slinger", cost: 35, hp: 10, income: 7, tier: "budget", maxCharges: 12, rechargeSeconds: 10, icon: Bird, flying: true },
-  brute: { short: "Brute", cost: 120, hp: 200, income: 24, tier: "mid", maxCharges: 10, rechargeSeconds: 14, icon: Turtle },
-  raider: { short: "Raider", cost: 250, hp: 80, income: 50, tier: "mid", maxCharges: 8, rechargeSeconds: 16, icon: Flame, resistance: "slow" },
-  juggernaut: { short: "Juggernaut", cost: 500, hp: 500, income: 100, tier: "mid", maxCharges: 6, rechargeSeconds: 22, icon: Shield, resistance: "all" },
-  phantom: { short: "Phantom", cost: 350, hp: 40, income: 70, tier: "mid", maxCharges: 3, rechargeSeconds: 24, icon: Ghost, flying: true },
-  siege_breaker: { short: "Siege Breaker", cost: 2000, hp: 1200, income: 400, tier: "endgame", maxCharges: 2, rechargeSeconds: 30, icon: Castle },
+  brute: { short: "Brute", cost: 120, hp: 200, income: 12, tier: "mid", maxCharges: 10, rechargeSeconds: 14, icon: Turtle },
+  raider: { short: "Raider", cost: 250, hp: 80, income: 25, tier: "mid", maxCharges: 8, rechargeSeconds: 16, icon: Flame, resistance: "slow" },
+  juggernaut: { short: "Juggernaut", cost: 500, hp: 500, income: 50, tier: "mid", maxCharges: 6, rechargeSeconds: 22, icon: Shield, resistance: "all" },
+  phantom: { short: "Phantom", cost: 350, hp: 40, income: 35, tier: "mid", maxCharges: 3, rechargeSeconds: 24, icon: Ghost, flying: true },
+  aura: { short: "Aura Warden", cost: 750, hp: 180, income: 75, tier: "mid", maxCharges: 4, rechargeSeconds: 28, icon: Sparkles, aura: true },
+  siege_breaker: { short: "Siege Breaker", cost: 2000, hp: 1200, income: 100, tier: "endgame", maxCharges: 2, rechargeSeconds: 30, icon: Castle },
   leviathan: { short: "Leviathan", cost: 5000, hp: 3000, income: 1000, tier: "endgame", maxCharges: 2, rechargeSeconds: 42, icon: Skull, resistance: "splash" },
-  wraith_lord: { short: "Wraith Lord", cost: 8000, hp: 300, income: 800, tier: "endgame", maxCharges: 1, rechargeSeconds: 60, icon: Ghost, flying: true, resistance: "physical" },
-  titan: { short: "Titan", cost: 20000, hp: 8000, income: 4000, tier: "endgame", maxCharges: 1, rechargeSeconds: 55, icon: Castle, resistance: "all" },
-  doomsday: { short: "Doomsday", cost: 50000, hp: 15000, income: 10000, tier: "endgame", maxCharges: 1, rechargeSeconds: 75, icon: Skull },
+  wraith_lord: { short: "Wraith Lord", cost: 8000, hp: 300, income: 400, tier: "endgame", maxCharges: 1, rechargeSeconds: 60, icon: Ghost, flying: true, resistance: "physical" },
+  siege_tank: { short: "Siege Tank", cost: 12000, hp: 6500, income: 600, tier: "endgame", maxCharges: 1, rechargeSeconds: 75, icon: Hammer, resistance: "all", straightLine: true, towerBreaker: true },
+  titan: { short: "Titan", cost: 20000, hp: 8000, income: 1000, tier: "endgame", maxCharges: 1, rechargeSeconds: 55, icon: Castle, resistance: "all" },
+  doomsday: { short: "Doomsday", cost: 50000, hp: 15000, income: 2500, tier: "endgame", maxCharges: 1, rechargeSeconds: 75, icon: Skull },
 };
 const UNIT_MAX_HP: Record<string, number> = Object.fromEntries(Object.entries(UNIT_INFO).map(([k, v]) => [k, v.hp]));
 
@@ -255,9 +257,13 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
       const isBig = unit.type === "titan" || unit.type === "doomsday";
       const isLarge = unit.type === "leviathan" || unit.type === "siege_breaker";
       const isMedium = unit.type === "juggernaut" || unit.type === "brute";
+      const isAura = unit.type === "aura";
+      const isSiegeTank = unit.type === "siege_tank";
 
-      const sizeClass = isBig ? "size-11" : isLarge ? "size-9" : isMedium ? "size-7" : isFlying ? "size-7" : "size-6";
-      const borderClass = isFlying ? "border-sky-400/60 bg-sky-500/[0.15] text-sky-100"
+      const sizeClass = isBig ? "size-11" : isLarge ? "size-9" : isSiegeTank ? "size-9" : isMedium ? "size-7" : isAura || isFlying ? "size-7" : "size-6";
+      const borderClass = isAura ? "border-fuchsia-300/70 bg-fuchsia-400/[0.18] text-fuchsia-100 shadow-[0_0_14px_3px_rgba(217,70,239,0.28)]"
+        : isSiegeTank ? "border-rose-300/70 bg-rose-500/[0.2] text-rose-100 shadow-[0_0_14px_3px_rgba(244,63,94,0.25)]"
+        : isFlying ? "border-sky-400/60 bg-sky-500/[0.15] text-sky-100"
         : isBig ? "border-red-500/60 bg-red-600/[0.22] text-red-100"
         : isLarge ? "border-amber-400/50 bg-amber-500/[0.2] text-amber-100"
         : isMedium ? "border-orange-400/50 bg-orange-500/[0.18] text-orange-100"
@@ -270,7 +276,9 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
             top: `${((pt.y + 0.5) / GRID_HEIGHT) * 100}%`,
           }}>
           <div className={`relative flex items-center justify-center rounded-full border-2 shadow-lg ${sizeClass} ${borderClass}`}>
-            <Icon className={`${isBig ? "size-4" : isLarge ? "size-3.5" : "size-3"}`} />
+            {isAura && <span className="pointer-events-none absolute inset-[-35%] rounded-full border border-fuchsia-300/35 animate-pulse" />}
+            {isSiegeTank && <span className="pointer-events-none absolute -right-3 top-1/2 h-px w-3 bg-rose-300/50 shadow-[0_0_6px_1px_rgba(251,113,133,0.5)]" />}
+            <Icon className={`${isBig ? "size-4" : isLarge || isSiegeTank ? "size-3.5" : "size-3"}`} />
           </div>
           {!compact && (
             <div className="absolute -top-3 left-1/2 h-1.5 w-9 -translate-x-1/2 overflow-hidden rounded-full bg-black/80 ring-1 ring-white/20 shadow-[0_0_5px_1px_rgba(0,0,0,0.55)]" aria-label="Unit HP">
@@ -535,6 +543,8 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
                     {charge.nextSeconds > 0 && ` · +1 in ${charge.nextSeconds}s`}
                     {info.flying && " · fly"}
                     {info.resistance && ` · ${info.resistance} res`}
+                    {info.aura && " · aura +25% speed"}
+                    {info.towerBreaker && " · deletes towers"}
                   </p>
                 </button>;
               })}
