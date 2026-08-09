@@ -247,3 +247,17 @@
 
 .modal-pop { animation: modal-pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards; }
 .goal-glow { animation: goal-glow 2s ease-in-out infinite; }
+
+/* Compact product chrome: health is already shown in the battlefield stats. */
+.xl\:grid-cols-\[0\.85fr_1\.6fr_0\.85fr\] > div:nth-child(2) [class*="border-rose-300/20"][class*="bg-rose-300/[0.06]"] {
+  display: none;
+}
+
+footer > span:last-child {
+  font-size: 0;
+}
+
+footer > span:last-child::after {
+  content: "v1.0";
+  font-size: 9px;
+}
