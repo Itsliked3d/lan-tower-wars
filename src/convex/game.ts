@@ -888,7 +888,7 @@ export const tick = mutation({
           .filter(({ unit }) => {
             const location = unitPoint(unit);
             const distance = Math.abs(location.x - towerLocation.x) + Math.abs(location.y - towerLocation.y);
-            return unit.hp > 0 && distance <= range;
+            return unit.hp > 0 && String(unit.ownerId) !== String(state.userId) && distance <= range;
           });
         const targets = config.splash ? inRange : inRange.slice(0, 1);
         for (const { unit, unitIndex } of targets) {
@@ -921,10 +921,13 @@ export const tick = mutation({
       }
 
       const leaked = movedUnits.filter((unit) => unit.x === GRID_WIDTH - 1 && unit.hp > 0);
+      const hostileLeaked = leaked.filter((unit) => String(unit.ownerId) !== String(state.userId));
       if (leaked.length > 0) {
-        const damage = leaked.reduce((total, unit) => total + playerDamageForUnit(unit), 0);
+        const damage = hostileLeaked.reduce((total, unit) => total + playerDamageForUnit(unit), 0);
         const damageDealt = Math.min(state.health, damage);
-        leakMessage = `${state.name} lost ${damageDealt} hp. The attackers continue to the next lane.`;
+        leakMessage = damageDealt > 0
+          ? `${state.name} lost ${damageDealt} hp. The attackers continue to the next lane.`
+          : `${state.name}'s own units passed through safely. The attackers continue to the next lane.`;
 
         // Lanes form a gameplay loop: a surviving unit is re-spawned at the
         // next living player's entry and keeps its remaining HP and owner.
@@ -958,7 +961,7 @@ export const tick = mutation({
         // A living sender steals back the hp dealt by their units.
         // Eliminated players stay eliminated; healing never resurrects them.
         let remainingDamageToSteal = damageDealt;
-        for (const unit of leaked) {
+        for (const unit of hostileLeaked) {
           if (remainingDamageToSteal <= 0 || !unit.ownerId) continue;
           const owner = game.players.find((candidate) => candidate.userId === unit.ownerId);
           if (!owner || owner.health <= 0) continue;
@@ -982,7 +985,7 @@ export const tick = mutation({
         gold: (isBot ? botGold : state.gold) + incomePayouts * (isBot ? botIncome : state.income) + killGold,
         income: isBot ? botIncome : state.income,
         unitCharges: isBot ? botUnitCharges : refreshedUnitCharges,
-        health: Math.max(0, state.health - leaked.reduce((total, unit) => total + playerDamageForUnit(unit), 0)),
+        health: Math.max(0, state.health - hostileLeaked.reduce((total, unit) => total + playerDamageForUnit(unit), 0)),
         laneUnits: remainingUnits,
         incoming: remainingUnits.length,
         towers: isBot ? botTowers : state.towers,
