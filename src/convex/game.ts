@@ -1002,7 +1002,7 @@ export const tick = mutation({
       return {
         ...p,
         health: stolenHealth > 0 && p.health > 0
-          ? Math.min(100, p.health + stolenHealth)
+          ? p.health + stolenHealth
           : p.health,
         ...(additions.length > 0
           ? {

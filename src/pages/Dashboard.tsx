@@ -338,15 +338,11 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
           </div>
           {/* Unit HP bar */}
           {!compact && (
-            <div className="absolute -top-5 left-1/2 w-12 -translate-x-1/2 text-center" title={`Unit HP: ${unit.hp}/${info?.hp ?? 0}`}>
-              <div className="mb-0.5 font-mono text-[6px] font-bold uppercase tracking-[0.12em] text-slate-300/80">Unit HP</div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-black/80 ring-1 ring-white/20 shadow-[0_0_5px_1px_rgba(0,0,0,0.55)]">
-                <div
-                  className={`h-full rounded-full transition-[width] duration-300 ${hpPct > 60 ? "bg-gradient-to-r from-emerald-400 to-emerald-300" : hpPct > 30 ? "bg-gradient-to-r from-amber-400 to-amber-300" : "bg-gradient-to-r from-red-500 to-red-400"}`}
-                  style={{ width: `${hpPct}%` }}
-                />
-              </div>
-              <div className="mt-0.5 font-mono text-[6px] font-semibold leading-none tabular-nums text-slate-300/75">{unit.hp}/{info?.hp ?? 0}</div>
+            <div className="absolute -top-3 left-1/2 h-1.5 w-9 -translate-x-1/2 overflow-hidden rounded-full bg-black/80 ring-1 ring-white/20 shadow-[0_0_5px_1px_rgba(0,0,0,0.55)]" aria-label="Unit HP">
+              <div
+                className={`h-full rounded-full transition-[width] duration-300 ${hpPct > 60 ? "bg-gradient-to-r from-emerald-400 to-emerald-300" : hpPct > 30 ? "bg-gradient-to-r from-amber-400 to-amber-300" : "bg-gradient-to-r from-red-500 to-red-400"}`}
+                style={{ width: `${hpPct}%` }}
+              />
             </div>
           )}
         </div>
