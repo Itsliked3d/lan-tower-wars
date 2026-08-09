@@ -41,7 +41,7 @@ const UNIT_CONFIG: Record<string, UnitConfig> = {
   wraith_lord: { label: "Wraith Lord", cost: 8000, income: 150, hp: 500, speed: 2.5, damage: 100, tier: "endgame", flying: true, resistance: "physical" },
   titan: { label: "Titan", cost: 20000, income: 350, hp: 8000, speed: 0.15, damage: 400, tier: "endgame", resistance: "all" },
   doomsday: { label: "Doomsday", cost: 50000, income: 500, hp: 15000, speed: 0.1, damage: 800, tier: "endgame" },
-  abuse_control: { label: "Abuse Control", cost: 0, income: 0, hp: 18, speed: 1.45, damage: 2, tier: "budget" },
+  abuse_control: { label: "Abuse Control", cost: 0, income: 0, hp: 10, speed: 1.45, damage: 2, tier: "budget" },
 } as const;
 
 const TOWER_CONFIG = {
@@ -711,6 +711,12 @@ export const tick = mutation({
             const distance = Math.abs(location.x - towerLocation.x) + Math.abs(location.y - towerLocation.y);
             return unit.hp > 0 && distance <= range;
           });
+        // Prioritize Abuse Control units
+        inRange.sort((a, b) => {
+          if (a.unit.type === "abuse_control" && b.unit.type !== "abuse_control") return -1;
+          if (a.unit.type !== "abuse_control" && b.unit.type === "abuse_control") return 1;
+          return 0;
+        });
         const targets = config.splash ? inRange : inRange.slice(0, 1);
         for (const { unit, unitIndex } of targets) {
           const location = unitPoint(unit);

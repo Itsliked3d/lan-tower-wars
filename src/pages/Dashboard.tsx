@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useMutation, useQuery } from "convex/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, Castle, Coins, Crosshair, Crown, Flame, Footprints, Hammer, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, Users, Zap } from "lucide-react";
+import { AlertTriangle, Bird, Castle, Coins, Crosshair, Crown, Flame, Footprints, Ghost, Hammer, HelpCircle, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, Turtle, Users, Zap } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -28,18 +28,19 @@ const TOWER_INFO: Record<TowerType, { short: string; cost: number; range: string
 const UNIT_INFO: Record<string, { short: string; cost: number; hp: number; income: number; tier: string; icon: typeof Footprints; flying?: boolean; resistance?: string }> = {
   soldier: { short: "Foot Soldier", cost: 5, hp: 14, income: 1, tier: "budget", icon: Footprints },
   scout: { short: "Scout", cost: 8, hp: 8, income: 1, tier: "budget", icon: Zap },
-  runner: { short: "Runner", cost: 12, hp: 6, income: 1, tier: "budget", icon: Zap },
+  runner: { short: "Runner", cost: 12, hp: 6, income: 1, tier: "budget", icon: Bird },
   grunt: { short: "Grunt", cost: 25, hp: 30, income: 2, tier: "budget", icon: Shield, resistance: "splash" },
-  slinger: { short: "Slinger", cost: 35, hp: 10, income: 3, tier: "budget", icon: Zap, flying: true },
-  brute: { short: "Brute", cost: 120, hp: 200, income: 8, tier: "mid", icon: Castle },
+  slinger: { short: "Slinger", cost: 35, hp: 10, income: 3, tier: "budget", icon: Bird, flying: true },
+  brute: { short: "Brute", cost: 120, hp: 200, income: 8, tier: "mid", icon: Turtle },
   raider: { short: "Raider", cost: 250, hp: 80, income: 15, tier: "mid", icon: Flame, resistance: "slow" },
   juggernaut: { short: "Juggernaut", cost: 500, hp: 500, income: 25, tier: "mid", icon: Shield, resistance: "all" },
-  phantom: { short: "Phantom", cost: 350, hp: 40, income: 18, tier: "mid", icon: Sparkles, flying: true },
+  phantom: { short: "Phantom", cost: 350, hp: 40, income: 18, tier: "mid", icon: Ghost, flying: true },
   siege_breaker: { short: "Siege Breaker", cost: 2000, hp: 1200, income: 60, tier: "endgame", icon: Castle },
   leviathan: { short: "Leviathan", cost: 5000, hp: 3000, income: 120, tier: "endgame", icon: Skull, resistance: "splash" },
-  wraith_lord: { short: "Wraith Lord", cost: 8000, hp: 500, income: 150, tier: "endgame", icon: Sparkles, flying: true, resistance: "physical" },
-  titan: { short: "Titan", cost: 20000, hp: 8000, income: 350, tier: "endgame", icon: Shield, resistance: "all" },
+  wraith_lord: { short: "Wraith Lord", cost: 8000, hp: 500, income: 150, tier: "endgame", icon: Ghost, flying: true, resistance: "physical" },
+  titan: { short: "Titan", cost: 20000, hp: 8000, income: 350, tier: "endgame", icon: Castle, resistance: "all" },
   doomsday: { short: "Doomsday", cost: 50000, hp: 15000, income: 500, tier: "endgame", icon: Skull },
+  abuse_control: { short: "Abuse Control", cost: 0, hp: 10, income: 0, tier: "budget", icon: HelpCircle },
 };
 const UNIT_MAX_HP: Record<string, number> = Object.fromEntries(Object.entries(UNIT_INFO).map(([k, v]) => [k, v.hp]));
 
@@ -55,7 +56,19 @@ function towerPoint(tower: NonNullable<Player["towers"]>[number]): GridPoint { r
 function unitPoint(unit: NonNullable<Player["laneUnits"]>[number]): GridPoint { return { x: unit.x ?? Math.round((unit.position / 100) * (GRID_WIDTH - 1)), y: unit.y ?? 4 }; }
 function pointKey(point: GridPoint) { return `${point.x}:${point.y}`; }
 
-function findVisualPath(towers: Player["towers"]): Set<string> {
+function findVisualPath(towers: Player["towers"], units?: Player["laneUnits"]): Set<string> {
+  // Flying units take a straight path — they ignore towers
+  if (units?.some((u) => u?.flying)) {
+    const straightPath = new Set<string>();
+    for (let x = 0; x < GRID_WIDTH; x++) {
+      straightPath.add(`${x}:${(units.find((u) => u?.flying)?.y ?? 4)}`);
+    }
+    return straightPath;
+  }
+  return findPathThroughTowers(towers);
+}
+
+function findPathThroughTowers(towers: Player["towers"]): Set<string> {
   const blocked = new Set((towers ?? []).map((tower) => pointKey(towerPoint(tower))));
   const start = { x: 0, y: 4 };
   const queue: Array<{ point: GridPoint; path: GridPoint[] }> = [{ point: start, path: [start] }];
@@ -141,7 +154,7 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
   const towers = towersOf(player);
   const units = unitsOf(player);
   const projectiles = projectilesOf(player);
-  const route = useMemo(() => findVisualPath(player.towers), [player.towers]);
+  const route = useMemo(() => findVisualPath(player.towers, player.laneUnits), [player.towers, player.laneUnits]);
   const towerMap = new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower]));
 
   return <div className="relative aspect-[14/8] overflow-hidden rounded-lg border border-white/[0.07] bg-[#060b15]">
@@ -178,23 +191,26 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
     {/* Units with smooth CSS position transitions */}
     {units.map((unit) => {
       const pt = unitPoint(unit);
-      const hpPct = Math.max(0, Math.min(100, (unit.hp / (UNIT_MAX_HP[unit.type] || 10)) * 100));
+      const info = UNIT_INFO[unit.type];
+      const hpPct = Math.max(0, Math.min(100, (unit.hp / (info?.hp || UNIT_MAX_HP[unit.type] || 10)) * 100));
       const isFlying = !!(unit as { flying?: boolean }).flying;
+      const isAbuse = unit.type === "abuse_control";
+      const Icon = info?.icon || HelpCircle;
       return (
         <div key={unit.id} className="absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-all duration-1000 ease-linear pointer-events-none"
           style={{
             left: `${((pt.x + 0.5) / GRID_WIDTH) * 100}%`,
             top: `${((pt.y + 0.5) / GRID_HEIGHT) * 100}%`,
           }}>
-          <div className={`relative flex items-center justify-center rounded-full border shadow-lg ${unit.type === "abuse_control" ? "size-8 border-red-400 bg-red-500/30 text-red-100" : isFlying ? "size-7 border-sky-400 bg-sky-400/20 text-sky-100" : unit.type === "titan" || unit.type === "doomsday" ? "size-10 border-red-500 bg-red-600/30 text-red-100" : unit.type === "leviathan" || unit.type === "siege_breaker" ? "size-9 border-amber-400 bg-amber-500/25 text-amber-100" : unit.type === "juggernaut" || unit.type === "brute" ? "size-8 border-orange-400 bg-orange-400/25 text-orange-100" : "size-6 border-amber-300 bg-amber-300/20 text-amber-100"}`}>
-            {unit.type === "abuse_control" ? <AlertTriangle className="size-4" /> : <Footprints className="size-3" />}
+          <div className={`relative flex items-center justify-center rounded-full border shadow-lg ${isAbuse ? "size-8 border-red-400 bg-red-500/30 text-red-100" : isFlying ? "size-7 border-sky-400 bg-sky-400/20 text-sky-100" : unit.type === "titan" || unit.type === "doomsday" ? "size-10 border-red-500 bg-red-600/30 text-red-100" : unit.type === "leviathan" || unit.type === "siege_breaker" ? "size-9 border-amber-400 bg-amber-500/25 text-amber-100" : unit.type === "juggernaut" || unit.type === "brute" ? "size-8 border-orange-400 bg-orange-400/25 text-orange-100" : "size-6 border-amber-300 bg-amber-300/20 text-amber-100"}`}>
+            {isAbuse ? <AlertTriangle className="size-4" /> : <Icon className="size-3" />}
             {isFlying && <span className="absolute -top-3 text-[7px] text-sky-300">▲</span>}
           </div>
           {/* HP bar */}
           {!compact && <div className="absolute -top-3 left-1/2 h-0.5 w-6 -translate-x-1/2 overflow-hidden rounded-full bg-black/60">
-            <div className={`h-full rounded-full transition-[width] duration-500 ${unit.type === "abuse_control" ? "bg-red-400" : hpPct > 50 ? "bg-emerald-300" : hpPct > 25 ? "bg-amber-300" : "bg-red-400"}`} style={{ width: `${hpPct}%` }} />
+            <div className={`h-full rounded-full transition-[width] duration-500 ${isAbuse ? "bg-red-400" : hpPct > 50 ? "bg-emerald-300" : hpPct > 25 ? "bg-amber-300" : "bg-red-400"}`} style={{ width: `${hpPct}%` }} />
           </div>}
-          {unit.type === "abuse_control" && !compact && <span className="absolute left-1/2 top-7 -translate-x-1/2 whitespace-nowrap rounded bg-red-500/80 px-1 py-0.5 text-[7px] font-bold text-white">Abuse Control</span>}
+          {isAbuse && !compact && <span className="absolute left-1/2 top-7 -translate-x-1/2 whitespace-nowrap rounded bg-red-500/80 px-1 py-0.5 text-[7px] font-bold text-white">Audit</span>}
         </div>
       );
     })}
