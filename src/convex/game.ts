@@ -45,20 +45,20 @@ type UnitConfig = {
 
 const UNIT_CONFIG: Record<string, UnitConfig> = {
   // ── Budget ──
-  soldier: { label: "Foot Soldier", cost: 5, income: 1, hp: 14, speed: 1.25, damage: 8, tier: "budget", maxCharges: 6, rechargeMs: 4_000 },
-  scout: { label: "Scout", cost: 8, income: 1, hp: 8, speed: 1.8, damage: 5, tier: "budget", maxCharges: 5, rechargeMs: 5_000 },
-  runner: { label: "Runner", cost: 12, income: 2, hp: 6, speed: 2.6, damage: 6, tier: "budget", maxCharges: 4, rechargeMs: 6_000 },
-  grunt: { label: "Grunt", cost: 25, income: 5, hp: 30, speed: 0.8, damage: 12, tier: "budget", maxCharges: 4, rechargeMs: 8_000, resistance: "splash" },
-  slinger: { label: "Slinger", cost: 35, income: 7, hp: 10, speed: 1.2, damage: 10, tier: "budget", maxCharges: 2, rechargeMs: 10_000, flying: true },
+  soldier: { label: "Foot Soldier", cost: 5, income: 1, hp: 14, speed: 1.25, damage: 8, tier: "budget", maxCharges: 50, rechargeMs: 2_000 },
+  scout: { label: "Scout", cost: 8, income: 1, hp: 8, speed: 1.8, damage: 5, tier: "budget", maxCharges: 35, rechargeMs: 4_000 },
+  runner: { label: "Runner", cost: 12, income: 2, hp: 6, speed: 2.6, damage: 6, tier: "budget", maxCharges: 25, rechargeMs: 5_000 },
+  grunt: { label: "Grunt", cost: 25, income: 5, hp: 30, speed: 0.8, damage: 12, tier: "budget", maxCharges: 18, rechargeMs: 8_000, resistance: "splash" },
+  slinger: { label: "Slinger", cost: 35, income: 7, hp: 10, speed: 1.2, damage: 10, tier: "budget", maxCharges: 12, rechargeMs: 10_000, flying: true },
   // ── Mid-game ──
-  brute: { label: "Brute", cost: 120, income: 24, hp: 200, speed: 0.5, damage: 40, tier: "mid", maxCharges: 3, rechargeMs: 14_000 },
-  raider: { label: "Raider", cost: 250, income: 50, hp: 80, speed: 2.0, damage: 25, tier: "mid", maxCharges: 2, rechargeMs: 16_000, resistance: "slow" },
-  juggernaut: { label: "Juggernaut", cost: 500, income: 100, hp: 500, speed: 0.35, damage: 65, tier: "mid", maxCharges: 2, rechargeMs: 22_000, resistance: "all" },
-  phantom: { label: "Phantom", cost: 350, income: 70, hp: 40, speed: 3.0, damage: 30, tier: "mid", maxCharges: 1, rechargeMs: 18_000, flying: true },
+  brute: { label: "Brute", cost: 120, income: 24, hp: 200, speed: 0.5, damage: 40, tier: "mid", maxCharges: 10, rechargeMs: 14_000 },
+  raider: { label: "Raider", cost: 250, income: 50, hp: 80, speed: 2.0, damage: 25, tier: "mid", maxCharges: 8, rechargeMs: 16_000, resistance: "slow" },
+  juggernaut: { label: "Juggernaut", cost: 500, income: 100, hp: 500, speed: 0.35, damage: 65, tier: "mid", maxCharges: 6, rechargeMs: 22_000, resistance: "all" },
+  phantom: { label: "Phantom", cost: 350, income: 70, hp: 40, speed: 3.0, damage: 30, tier: "mid", maxCharges: 3, rechargeMs: 24_000, flying: true },
   // ── Endgame ──
   siege_breaker: { label: "Siege Breaker", cost: 2000, income: 400, hp: 1200, speed: 0.3, damage: 120, tier: "endgame", maxCharges: 2, rechargeMs: 30_000 },
-  leviathan: { label: "Leviathan", cost: 5000, income: 1000, hp: 3000, speed: 0.2, damage: 200, tier: "endgame", maxCharges: 1, rechargeMs: 42_000, resistance: "splash" },
-  wraith_lord: { label: "Wraith Lord", cost: 8000, income: 1600, hp: 500, speed: 2.5, damage: 100, tier: "endgame", maxCharges: 1, rechargeMs: 50_000, flying: true, resistance: "physical" },
+  leviathan: { label: "Leviathan", cost: 5000, income: 1000, hp: 3000, speed: 0.2, damage: 200, tier: "endgame", maxCharges: 2, rechargeMs: 42_000, resistance: "splash" },
+  wraith_lord: { label: "Wraith Lord", cost: 8000, income: 800, hp: 300, speed: 1.8, damage: 55, tier: "endgame", maxCharges: 1, rechargeMs: 60_000, flying: true, resistance: "physical" },
   titan: { label: "Titan", cost: 20000, income: 4000, hp: 8000, speed: 0.15, damage: 400, tier: "endgame", maxCharges: 1, rechargeMs: 55_000, resistance: "all" },
   doomsday: { label: "Doomsday", cost: 50000, income: 10000, hp: 15000, speed: 0.1, damage: 800, tier: "endgame", maxCharges: 1, rechargeMs: 75_000 },
 

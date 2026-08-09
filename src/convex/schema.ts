@@ -65,6 +65,8 @@ const gridPointValidator = v.object({
 const laneUnitValidator = v.object({
   id: v.string(),
   type: unitTypeValidator,
+  // The original sender keeps ownership when a unit loops through later lanes.
+  ownerId: v.optional(v.id("users")),
   // Legacy horizontal position is kept for old rooms and simple telemetry.
   position: v.number(),
   hp: v.number(),
