@@ -16,6 +16,18 @@ export const roleValidator = v.union(
 );
 export type Role = Infer<typeof roleValidator>;
 
+const playerValidator = v.object({
+  userId: v.id("users"),
+  name: v.string(),
+  color: v.string(),
+  health: v.number(),
+  units: v.number(),
+  incoming: v.number(),
+  shield: v.number(),
+  sent: v.number(),
+  defended: v.number(),
+});
+
 const schema = defineSchema(
   {
     // default auth tables using convex auth.
@@ -32,12 +44,19 @@ const schema = defineSchema(
       role: v.optional(roleValidator), // role of the user. do not remove
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
-    // add other tables here
-
-    // tableName: defineTable({
-    //   ...
-    //   // table fields
-    // }).index("by_field", ["field"])
+    games: defineTable({
+      roomCode: v.string(),
+      status: v.union(
+        v.literal("lobby"),
+        v.literal("playing"),
+        v.literal("ended"),
+      ),
+      maxPlayers: v.number(),
+      wave: v.number(),
+      players: v.array(playerValidator),
+      lastAction: v.string(),
+      updatedAt: v.number(),
+    }).index("by_room_code", ["roomCode"]),
   },
   {
     schemaValidation: false,
