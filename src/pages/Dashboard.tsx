@@ -145,13 +145,16 @@ function ProjectileLayer({ projectiles }: { projectiles: Projectile[] }) {
   return <>{projectiles.map((p) => { const progress = Math.max(0, Math.min(1, p.progress)); const x = p.x + (p.targetX - p.x) * progress; const y = p.y + (p.targetY - p.y) * progress; const color = p.towerType === "far" ? "bg-violet-300" : p.towerType === "splash" ? "bg-fuchsia-300" : p.towerType === "slow" ? "bg-emerald-300" : "bg-cyan-300"; return <span key={p.id} className={`pointer-events-none absolute z-20 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_8px_3px_currentColor] ${color}`} style={{ left: `${((x + 0.5) / GRID_WIDTH) * 100}%`, top: `${((y + 0.5) / GRID_HEIGHT) * 100}%` }} />; })}</>;
 }
 
-function GridLane({ player, compact = false, selectedTowerType, selectedMageElement, onCellClick, onTowerClick, selectedTowerId }: { player: Player; compact?: boolean; selectedTowerType?: TowerType; selectedMageElement?: MageElement; onCellClick?: (x: number, y: number) => void; onTowerClick?: (towerId: string) => void; selectedTowerId?: string | null }) {
+function GridLane({ player, compact = false, selectedTowerType, selectedMageElement, placementPoint, onCellClick, onCellHover, onTowerClick, selectedTowerId }: { player: Player; compact?: boolean; selectedTowerType?: TowerType | null; selectedMageElement?: MageElement; placementPoint?: GridPoint | null; onCellClick?: (x: number, y: number) => void; onCellHover?: (point: GridPoint | null) => void; onTowerClick?: (towerId: string) => void; selectedTowerId?: string | null }) {
   const towers = towersOf(player);
   const units = unitsOf(player);
   const projectiles = projectilesOf(player);
   const selectedTower = selectedTowerId ? towers.find((tower) => tower.id === selectedTowerId) : null;
   const selectedTowerPoint = selectedTower ? towerPoint(selectedTower) : null;
   const selectedRange = selectedTower ? TOWER_INFO[selectedTower.type].rangeCells + (selectedTower.upgradeBranch === "control" ? (selectedTower.upgradeLevel ?? 0) : 0) : 0;
+  const placementRange = selectedTowerType ? TOWER_INFO[selectedTowerType].rangeCells : 0;
+  const activeRangePoint = selectedTowerPoint ?? placementPoint ?? null;
+  const activeRange = selectedTowerPoint ? selectedRange : placementRange;
   const towerSignature = towers.map((tower) => `${tower.id}:${tower.x ?? ""}:${tower.y ?? ""}:${tower.type}:${tower.element ?? ""}:${tower.upgradeBranch ?? ""}:${tower.upgradeLevel ?? 0}`).join("|");
   const route = useMemo(() => findVisualPath(player.towers), [towerSignature]);
   const towerMap = useMemo(() => new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower])), [towerSignature]);
@@ -175,6 +178,8 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
           role={canBuild || tower ? "button" : undefined}
           tabIndex={canBuild || tower ? 0 : -1}
           onClick={() => { if (canBuild) onCellClick?.(x, y); if (tower && onTowerClick) onTowerClick(tower.id); }}
+          onMouseEnter={() => onCellHover?.(canBuild ? { x, y } : null)}
+          onMouseLeave={() => onCellHover?.(null)}
           className={`relative border-r border-b border-white/[0.025] transition-all duration-150 ${
             isStart ? "bg-gradient-to-r from-cyan-400/[0.06] to-transparent"
             : isGoal ? "goal-glow bg-gradient-to-l from-rose-400/[0.06] to-transparent"
@@ -228,16 +233,16 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
       })}
     </div>
 
-    {!compact && selectedTowerPoint && (
+    {!compact && activeRangePoint && activeRange > 0 && (
       <div
         className="pointer-events-none absolute z-[1] rounded-[18%] border border-dashed border-cyan-200/20 bg-cyan-200/[0.012]"
         style={{
-          left: `${((selectedTowerPoint.x - selectedRange) / GRID_WIDTH) * 100}%`,
-          top: `${((selectedTowerPoint.y - selectedRange) / GRID_HEIGHT) * 100}%`,
-          width: `${((selectedRange * 2 + 1) / GRID_WIDTH) * 100}%`,
-          height: `${((selectedRange * 2 + 1) / GRID_HEIGHT) * 100}%`,
+          left: `${((activeRangePoint.x - activeRange) / GRID_WIDTH) * 100}%`,
+          top: `${((activeRangePoint.y - activeRange) / GRID_HEIGHT) * 100}%`,
+          width: `${((activeRange * 2 + 1) / GRID_WIDTH) * 100}%`,
+          height: `${((activeRange * 2 + 1) / GRID_HEIGHT) * 100}%`,
         }}
-        aria-label={`Range ${selectedRange}`}
+        aria-label={`Range ${activeRange}`}
       />
     )}
 
@@ -383,15 +388,29 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
     .slice(1)
     .map((_, offset) => room.players[(currentIndex + offset + 1) % room.players.length])
     .find((candidate) => candidate.health > 0);
-  const [selectedTowerType, setSelectedTowerType] = useState<TowerType>("close");
+  const [selectedTowerType, setSelectedTowerType] = useState<TowerType | null>(null);
   const [selectedMageElement, setSelectedMageElement] = useState<MageElement>("fire");
   const [selectedTowerId, setSelectedTowerId] = useState<string | null>(null);
+  const [placementPoint, setPlacementPoint] = useState<GridPoint | null>(null);
   const [unitTab, setUnitTab] = useState<"budget" | "mid" | "endgame">("budget");
   const [clock, setClock] = useState(() => Date.now());
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 1000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "q") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.tagName === "SELECT") return;
+      setSelectedTowerType(null);
+      setSelectedTowerId(null);
+      setPlacementPoint(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   if (!player) return null;
@@ -410,6 +429,14 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
   const selectedTower = selectedTowerId ? myTowers.find((t) => t.id === selectedTowerId) : null;
   const onBulkUpgrade = (type: TowerType, level: number, branch: "power" | "control") => {
     myTowers.filter((tower) => tower.type === type && (tower.upgradeLevel ?? 0) === level && (!tower.upgradeBranch || tower.upgradeBranch === branch)).forEach((tower) => onUpgrade(tower.id, branch));
+  };
+  const selectTowerType = (type: TowerType) => {
+    setSelectedTowerType(type);
+    setSelectedTowerId(null);
+    setPlacementPoint(null);
+  };
+  const handleCellHover = (point: GridPoint | null) => {
+    setPlacementPoint(selectedTowerType ? point : null);
   };
 
   const tabUnits = (Object.entries(UNIT_INFO) as [UnitType, typeof UNIT_INFO[UnitType]][]).filter(([, info]) => info.tier === unitTab);
@@ -452,7 +479,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
           <div className="grid grid-cols-2 gap-1.5">
             {(Object.entries(TOWER_INFO) as [TowerType, typeof TOWER_INFO[TowerType]][]).map(([type, info]) => {
               const Icon = info.icon;
-              return <button key={type} type="button" onClick={() => setSelectedTowerType(type)}
+              return <button key={type} type="button" onClick={() => selectTowerType(type)}
                 disabled={gold < info.cost || isBusy}
                 className={`rounded-lg border p-2 text-left transition ${selectedTowerType === type ? "border-cyan-300/50 bg-cyan-300/10 ring-1 ring-cyan-300/15" : "border-white/6 bg-white/[0.02] hover:border-white/15"} ${gold < info.cost ? "opacity-30 cursor-not-allowed" : ""}`}>
                 <div className="flex items-center justify-between"><Icon className="size-3.5 text-cyan-200" /><span className="font-mono text-[10px] text-amber-200">{info.cost}g</span></div>
@@ -531,7 +558,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
 
         </CardHeader>
         <CardContent className="pt-3 space-y-3">
-          <GridLane player={player} selectedTowerType={selectedTowerType} selectedMageElement={selectedMageElement} onCellClick={canAct ? (x, y) => onBuild(selectedTowerType, x, y, selectedTowerType === "splash" ? selectedMageElement : undefined) : undefined} onTowerClick={canAct ? (id) => setSelectedTowerId(id === selectedTowerId ? null : id) : undefined} selectedTowerId={selectedTowerId} />
+          <GridLane player={player} selectedTowerType={selectedTowerType} selectedMageElement={selectedMageElement} placementPoint={placementPoint} onCellClick={canAct && selectedTowerType ? (x, y) => onBuild(selectedTowerType, x, y, selectedTowerType === "splash" ? selectedMageElement : undefined) : undefined} onCellHover={canAct && selectedTowerType ? handleCellHover : undefined} onTowerClick={canAct ? (id) => { setPlacementPoint(null); setSelectedTowerId(id === selectedTowerId ? null : id); } : undefined} selectedTowerId={selectedTowerId} />
           <div className="grid grid-cols-3 gap-1.5 text-center">
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-white">{player.health}</p><p className="text-[8px] text-slate-600">integrity</p></div>
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-cyan-100">{myTowers.length}</p><p className="text-[8px] text-slate-600">walls</p></div>
