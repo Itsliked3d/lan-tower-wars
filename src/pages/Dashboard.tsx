@@ -28,6 +28,7 @@ function mageElementFor(tower: TowerRecord | Projectile): MageElement {
 }
 
 const GRID_WIDTH = 18;
+const PLAYER_HP_LABEL = "PLAYER HP";
 const GRID_HEIGHT = 10;
 const ATTACK_DELAY_SECONDS = 30;
 
@@ -112,7 +113,24 @@ function findPathThroughTowers(towers: Player["towers"]): Set<string> {
   return new Set();
 }
 
-function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: string }) { return <div className="h-2 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10"><div className={`h-full rounded-full transition-[width] duration-500 ${color} shadow-[0_0_10px_2px_currentColor]`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>; }
+function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: string }) {
+  useEffect(() => {
+    document.querySelectorAll<HTMLElement>("p").forEach((label) => {
+      if (label.textContent?.trim() !== "integrity") return;
+      label.textContent = PLAYER_HP_LABEL;
+      label.className = "text-[8px] font-bold uppercase tracking-[0.16em] text-rose-300/90";
+      const card = label.parentElement;
+      card?.classList.add("rounded-xl", "border-rose-300/25", "bg-rose-300/[0.08]", "shadow-[0_0_14px_1px_rgba(251,113,133,0.1)]");
+      card?.querySelector("p:first-child")?.classList.add("text-base", "font-bold", "text-rose-50");
+    });
+    document.querySelectorAll<HTMLElement>("span.font-mono").forEach((health) => {
+      if (!/^\\d+%$/.test(health.textContent?.trim() ?? "")) return;
+      health.textContent = `${health.textContent?.trim().replace("%", "")} hp`;
+      health.className = "font-mono text-rose-200/80";
+    });
+  }, [value]);
+  return <div className="h-2 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10" aria-label={`HP ${Math.round(value)}`}><div className={`h-full rounded-full transition-[width] duration-500 ${color} shadow-[0_0_10px_2px_currentColor]`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>;
+}
 
 // ── Prominent economy readout: wallet, payout income, and next payout timer ──
 function EconomyStrip({ player, clock }: { player: Player; clock: number }) {
@@ -318,13 +336,17 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
               </>
             )}
           </div>
-          {/* HP bar */}
+          {/* Unit HP bar */}
           {!compact && (
-            <div className="absolute -top-3 left-1/2 h-1.5 w-9 -translate-x-1/2 overflow-hidden rounded-full bg-black/80 ring-1 ring-white/20 shadow-[0_0_5px_1px_rgba(0,0,0,0.55)]">
-              <div
-                className={`h-full rounded-full transition-[width] duration-300 ${hpPct > 60 ? "bg-gradient-to-r from-emerald-400 to-emerald-300" : hpPct > 30 ? "bg-gradient-to-r from-amber-400 to-amber-300" : "bg-gradient-to-r from-red-500 to-red-400"}`}
-                style={{ width: `${hpPct}%` }}
-              />
+            <div className="absolute -top-5 left-1/2 w-12 -translate-x-1/2 text-center" title={`Unit HP: ${unit.hp}/${info?.hp ?? 0}`}>
+              <div className="mb-0.5 font-mono text-[6px] font-bold uppercase tracking-[0.12em] text-slate-300/80">Unit HP</div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-black/80 ring-1 ring-white/20 shadow-[0_0_5px_1px_rgba(0,0,0,0.55)]">
+                <div
+                  className={`h-full rounded-full transition-[width] duration-300 ${hpPct > 60 ? "bg-gradient-to-r from-emerald-400 to-emerald-300" : hpPct > 30 ? "bg-gradient-to-r from-amber-400 to-amber-300" : "bg-gradient-to-r from-red-500 to-red-400"}`}
+                  style={{ width: `${hpPct}%` }}
+                />
+              </div>
+              <div className="mt-0.5 font-mono text-[6px] font-semibold leading-none tabular-nums text-slate-300/75">{unit.hp}/{info?.hp ?? 0}</div>
             </div>
           )}
         </div>
@@ -602,7 +624,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
                   </div>
                   <p className="mt-0.5 text-[10px] font-medium text-white leading-tight">{info.short}</p>
                   <p className="text-[8px] text-slate-500">
-                    {info.hp}hp · +{info.income}/15s · {charge.charges}/{info.maxCharges} ready
+                    {info.hp} Unit HP · +{info.income}/15s · {charge.charges}/{info.maxCharges} ready
                     {charge.nextSeconds > 0 && ` · +1 in ${charge.nextSeconds}s`}
                     {info.flying && " · fly"}
                     {info.resistance && ` · ${info.resistance} res`}
@@ -624,7 +646,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
         <CardHeader className="flex flex-row items-center justify-between border-b border-white/5 pb-3">
           <div className="flex items-center gap-2">
             <span className="font-mono text-[9px] text-slate-600">BATTLEFIELD</span>
-            <CardTitle className="text-sm text-white">{player.name}</CardTitle>
+            <CardTitle className="text-sm text-white">{player.name}<span className="ml-2 rounded border border-rose-300/20 bg-rose-300/[0.06] px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase tracking-[0.16em] text-rose-300">Player HP</span></CardTitle>
           </div>
 
         </CardHeader>
