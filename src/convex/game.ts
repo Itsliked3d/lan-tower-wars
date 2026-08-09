@@ -1065,9 +1065,9 @@ export const tick = mutation({
         const config = TOWER_CONFIG[tower.type];
         const level = tower.upgradeLevel ?? 0;
         const mageElement = tower.type === "splash" ? (tower.element ?? "fire") : undefined;
-        const elementDamage = mageElement ? MAGE_ELEMENT_CONFIG[mageElement].damageMultiplier : 1;
         const range = config.range + (tower.upgradeBranch === "control" ? level : 0);
-        const damage = config.damage * elementDamage * (1 + (tower.upgradeBranch === "power" ? level * 0.2 : 0));
+        // Element multipliers are applied once at impact, where resistances and effects are resolved.
+        const damage = config.damage * (1 + (tower.upgradeBranch === "power" ? level * 0.2 : 0));
         const towerLocation = towerPoint(tower);
         const inRange = movedUnits
           .map((unit, unitIndex) => ({ unit, unitIndex }))
