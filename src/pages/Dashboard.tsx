@@ -484,7 +484,8 @@ export default function Dashboard() {
   const sendUnit = useMutation(api.game.sendUnit);
   const upgradeTower = useMutation(api.game.upgradeTower);
   const tick = useMutation(api.game.tick);
-  const currentUserId = undefined;
+  const currentUser = useQuery(api.users.currentUser);
+  const currentUserId = currentUser?._id ? String(currentUser._id) : undefined;
   const isLoadingRoom = Boolean(roomCode && room === undefined);
   const showSetup = !roomCode || room === null;
   const roomStatus = room?.status ?? "lobby";
