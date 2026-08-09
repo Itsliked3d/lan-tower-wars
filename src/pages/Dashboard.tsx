@@ -3,8 +3,7 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Castle, Coins, Crosshair, Crown, Flame, Footprints, Hammer, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, Users, Zap } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
@@ -466,8 +465,6 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, on
 }
 
 export default function Dashboard() {
-  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
-  const { signIn } = useAuthActions();
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [roomInput, setRoomInput] = useState("");
@@ -489,13 +486,6 @@ export default function Dashboard() {
   const isLoadingRoom = Boolean(roomCode && room === undefined);
   const showSetup = !roomCode || room === null;
   const roomStatus = room?.status ?? "lobby";
-
-  // Auto anonymous sign-in
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      signIn("anonymous").catch(() => {});
-    }
-  }, [authLoading, isAuthenticated, signIn]);
 
   useEffect(() => {
     if (!roomCode || roomStatus !== "playing") return;
@@ -536,11 +526,6 @@ export default function Dashboard() {
   };
 
 
-
-  // Show loading while auth is resolving
-  if (authLoading) {
-    return <main className="flex min-h-screen items-center justify-center bg-[#080b14]"><div className="flex flex-col items-center gap-3"><Sparkles className="size-5 animate-pulse text-cyan-200" /><span className="text-xs text-slate-500">connecting…</span></div></main>;
-  }
 
   return <main className="min-h-screen bg-[#080b14] text-slate-100">
     <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_85%_0%,rgba(34,211,238,0.05),transparent_30%),linear-gradient(180deg,#080b14_0%,#0a0f1e_60%,#080b14_100%)]" />

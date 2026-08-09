@@ -2,13 +2,12 @@ import '@vly-ai/integrations';
 import { Toaster } from "@/components/ui/sonner";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { InstrumentationProvider } from "@/instrumentation.tsx";
-import { ConvexAuthProvider } from "@convex-dev/auth/react";
-import { ConvexReactClient } from "convex/react";
+import { ConvexAuthProvider, useAuthActions } from "@convex-dev/auth/react";
+import { ConvexReactClient, useConvexAuth } from "convex/react";
 import { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import "./index.css";
-import "./types/global.d.ts";
 
 // Lazy load route components for better code splitting
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
@@ -25,7 +24,27 @@ function RouteLoading() {
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
+// Auto-sign-in as anonymous — runs once at app startup
+function AnonymousAuth({ children }: { children: React.ReactNode }) {
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const { signIn } = useAuthActions();
 
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      signIn("anonymous").catch(() => {});
+    }
+  }, [isLoading, isAuthenticated, signIn]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#080b14]">
+        <div className="animate-pulse text-slate-500 text-xs">connecting…</div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
 
 function RouteSyncer() {
   const location = useLocation();
@@ -56,16 +75,18 @@ createRoot(document.getElementById("root")!).render(
     <VlyToolbar />
     <InstrumentationProvider>
       <ConvexAuthProvider client={convex}>
-        <BrowserRouter>
-          <RouteSyncer />
-          <Suspense fallback={<RouteLoading />}>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-        <Toaster />
+        <AnonymousAuth>
+          <BrowserRouter>
+            <RouteSyncer />
+            <Suspense fallback={<RouteLoading />}>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+          <Toaster />
+        </AnonymousAuth>
       </ConvexAuthProvider>
     </InstrumentationProvider>
   </StrictMode>,
