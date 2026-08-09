@@ -45,6 +45,7 @@ const towerTypeValidator = v.union(
   v.literal("far"),
   v.literal("splash"),
   v.literal("slow"),
+  v.literal("anti_air"),
 );
 
 const mageElementValidator = v.union(
@@ -81,6 +82,15 @@ const laneUnitValidator = v.object({
   straightLine: v.optional(v.boolean()),
   towerBreaker: v.optional(v.boolean()),
   resistance: v.optional(v.union(v.literal("splash"), v.literal("slow"), v.literal("physical"), v.literal("all"))),
+  statusEffects: v.optional(v.object({
+    fire: v.optional(v.number()),
+    frost: v.optional(v.number()),
+  })),
+  burnDamage: v.optional(v.number()),
+  burnUntil: v.optional(v.number()),
+  slowStacks: v.optional(v.number()),
+  slowUntil: v.optional(v.number()),
+  armorBrokenUntil: v.optional(v.number()),
 });
 
 const towerValidator = v.object({

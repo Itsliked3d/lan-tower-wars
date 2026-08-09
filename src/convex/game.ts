@@ -82,17 +82,25 @@ const MAGE_ELEMENT_CONFIG: Record<MageElement, { label: string; damageMultiplier
 };
 
 const TOWER_CONFIG = {
-  close: { label: "Pulse Tower", cost: 15, range: 1, damage: 10, splash: false, slow: false },
-  far: { label: "Rail Tower", cost: 25, range: 3, damage: 4, splash: false, slow: false },
-  slow: { label: "Snare Tower", cost: 30, range: 2, damage: 3, splash: false, slow: true },
+  close: { label: "Pulse Tower", cost: 15, range: 1, damage: 10, splash: false, slow: false, antiAir: false },
+  far: { label: "Rail Tower", cost: 25, range: 3, damage: 4, splash: false, slow: false, antiAir: false },
+  slow: { label: "Snare Tower", cost: 30, range: 2, damage: 3, splash: false, slow: true, antiAir: false },
   // Stored as "splash" for compatibility with rooms created before this replacement.
-  splash: { label: "Mage Tower", cost: 45, range: 2, damage: 6, splash: false, slow: false },
+  splash: { label: "Mage Tower", cost: 45, range: 2, damage: 6, splash: true, slow: false, antiAir: false },
+  anti_air: { label: "Skywatch Tower", cost: 55, range: 4, damage: 14, splash: false, slow: false, antiAir: true },
 } as const;
 
 const UPGRADE_COSTS = [75, 225, 600] as const;
 
 type Player = Doc<"games">["players"][number];
 type UnitCharge = NonNullable<Player["unitCharges"]>[number];
+type UnitStatus = NonNullable<Player["laneUnits"]>[number] & {
+  burnDamage?: number;
+  burnUntil?: number;
+  slowStacks?: number;
+  slowUntil?: number;
+  armorBrokenUntil?: number;
+};
 type GridPoint = { x: number; y: number };
 type TowerLike = {
   x?: number;
@@ -460,6 +468,7 @@ export const buildTower = mutation({
       v.literal("far"),
       v.literal("splash"),
       v.literal("slow"),
+      v.literal("anti_air"),
     ),
     x: v.optional(v.number()),
     y: v.optional(v.number()),
@@ -618,6 +627,7 @@ export const upgradeMatchingTowers = mutation({
       v.literal("far"),
       v.literal("splash"),
       v.literal("slow"),
+      v.literal("anti_air"),
     ),
     targetLevel: v.number(),
     branch: v.union(v.literal("power"), v.literal("control")),
@@ -744,11 +754,15 @@ export const sendUnit = mutation({
       path,
       pathIndex: 0,
       pathProgress: 0,
-      flying: config.flying ?? false,
-      resistance: config.resistance,
-      straightLine: config.straightLine ?? false,
-      towerBreaker: config.towerBreaker ?? false,
-    };
+      flying: config.flying ?? false,        resistance: config.resistance,
+        straightLine: config.straightLine ?? false,
+        towerBreaker: config.towerBreaker ?? false,
+        burnDamage: 0,
+        burnUntil: 0,
+        slowStacks: 0,
+        slowUntil: 0,
+        armorBrokenUntil: 0,
+      };
     const players = game.players.map((current, currentIndex) => {
       if (currentIndex === index) {
         return {
@@ -861,6 +875,11 @@ export const tick = mutation({
                 auraRadius: cfg.auraRadius,
                 straightLine: cfg.straightLine ?? false,
                 towerBreaker: cfg.towerBreaker ?? false,
+                burnDamage: 0,
+                burnUntil: 0,
+                slowStacks: 0,
+                slowUntil: 0,
+                armorBrokenUntil: 0,
               });
             }
           }
@@ -875,11 +894,19 @@ export const tick = mutation({
         return groundPathCache.get(key) ?? null;
       };
 
-      const auraUnits = state.laneUnits.filter((unit) => {
+      const unitsWithEffects: UnitStatus[] = state.laneUnits.map((unit) => {
+        const statusUnit = unit as UnitStatus;
+        if (statusUnit.hp <= 0 || (statusUnit.burnUntil ?? 0) <= now) return statusUnit;
+        return {
+          ...statusUnit,
+          hp: statusUnit.hp - (statusUnit.burnDamage ?? 0) * elapsed,
+        };
+      });
+      const auraUnits = unitsWithEffects.filter((unit) => {
         const config = UNIT_CONFIG[unit.type];
         return unit.hp > 0 && Boolean(config?.auraRadius) && Boolean(unit.ownerId);
       });
-      const movedUnits = state.laneUnits.map((unit) => {
+      const movedUnits: UnitStatus[] = unitsWithEffects.map((unit) => {
         const start = unitPoint(unit);
         const path = unit.flying || unit.straightLine ? flyingPathFor(start.y) : groundPathFor(start);
         if (!path) return { ...unit, x: start.x, y: start.y };
@@ -894,9 +921,11 @@ export const tick = mutation({
             const distance = Math.abs(start.x - auraPoint.x) + Math.abs(start.y - auraPoint.y);
             return distance <= (auraConfig?.auraRadius ?? 0);
           });
-        const speedMultiplier = auraBoost
+        const slowStacks = unit.slowUntil && unit.slowUntil > now ? unit.slowStacks ?? 0 : 0;
+        const slowMultiplier = Math.max(0.55, 1 - slowStacks * 0.12);
+        const speedMultiplier = (auraBoost
           ? (UNIT_CONFIG[auraUnits.find((aura) => aura.ownerId === unit.ownerId)?.type ?? "soldier"]?.auraSpeedMultiplier ?? 1.25)
-          : 1;
+          : 1) * slowMultiplier;
 
         // Flying units use a stable origin-to-goal path and keep cumulative
         // progress. Ground units recalculate from their current cell.
@@ -950,38 +979,84 @@ export const tick = mutation({
 
         const targetIndex = movedUnits.findIndex((unit) => unit.id === projectile.targetUnitId);
         if (targetIndex < 0) continue;
-        const targetUnit = movedUnits[targetIndex];
+        const applyImpactDamage = (
+          unitIndex: number,
+          rawDamage: number,
+          element?: MageElement,
+          isAreaHit = false,
+          appliesSlow = false,
+        ) => {
+          const unit = movedUnits[unitIndex];
+          if (!unit || unit.hp <= 0) return;
+          const ignoresResistance = element === "void" || (unit.armorBrokenUntil ?? 0) > now;
+          let effectiveDamage = rawDamage;
+          if (!ignoresResistance && (unit.resistance === "all" || unit.resistance === "physical")) {
+            effectiveDamage *= 0.5;
+          }
+          if (!ignoresResistance && isAreaHit && unit.resistance === "splash") {
+            effectiveDamage *= 0.3;
+          }
+          if (element) effectiveDamage *= mageDamageMultiplier(element, unit);
 
-        // Handle resistances
-        let effectiveDamage = projectile.damage;
-        const ignoresResistance = projectile.towerType === "splash" && projectile.element === "void";
-        if (!ignoresResistance && (targetUnit.resistance === "all" || targetUnit.resistance === "physical")) {
-          effectiveDamage *= 0.5;
-        }
-        if (projectile.splash && targetUnit.resistance === "splash") {
-          effectiveDamage *= 0.3;
-        }
-        if (projectile.towerType === "splash" && projectile.element) {
-          effectiveDamage *= mageDamageMultiplier(projectile.element, targetUnit);
-        }
+          const nextUnit = {
+            ...unit,
+            hp: unit.hp - effectiveDamage,
+            burnDamage: element === "fire"
+              ? Math.max(unit.burnDamage ?? 0, rawDamage * 0.25)
+              : unit.burnDamage,
+            burnUntil: element === "fire" ? Math.max(unit.burnUntil ?? 0, now + 3_500) : unit.burnUntil,
+            slowStacks: element === "frost" && unit.resistance !== "slow" && unit.resistance !== "all"
+              ? Math.min(3, (unit.slowUntil ?? 0) > now ? (unit.slowStacks ?? 0) + 1 : 1)
+              : appliesSlow && unit.resistance !== "slow" && unit.resistance !== "all"
+                ? Math.min(3, (unit.slowUntil ?? 0) > now ? (unit.slowStacks ?? 0) + 1 : 1)
+                : unit.slowStacks,
+            slowUntil: (element === "frost" || appliesSlow) && unit.resistance !== "slow" && unit.resistance !== "all"
+              ? now + 4_000
+              : unit.slowUntil,
+            armorBrokenUntil: element === "void" ? now + 5_000 : unit.armorBrokenUntil,
+          };
+          movedUnits[unitIndex] = nextUnit;
+        };
 
         if (projectile.splash) {
           const impactPoint = unitPoint(movedUnits[targetIndex]);
           movedUnits.forEach((unit, unitIndex) => {
             const location = unitPoint(unit);
-            if (Math.abs(location.x - impactPoint.x) + Math.abs(location.y - impactPoint.y) <= 1) {
-              let dmg = projectile.damage;
-              if (projectile.element === "void") {
-                dmg *= mageDamageMultiplier(projectile.element, unit);
-              } else {
-                if (unit.resistance === "all") dmg *= 0.5;
-                if (unit.resistance === "splash") dmg *= 0.3;
-              }
-              movedUnits[unitIndex] = { ...unit, hp: unit.hp - dmg };
+            if (unit.hp > 0 && Math.hypot(location.x - impactPoint.x, location.y - impactPoint.y) <= 1.5) {
+              applyImpactDamage(unitIndex, projectile.damage, projectile.element, true);
             }
           });
         } else {
-          movedUnits[targetIndex] = { ...targetUnit, hp: targetUnit.hp - effectiveDamage };
+          applyImpactDamage(
+            targetIndex,
+            projectile.damage,
+            projectile.element,
+            false,
+            projectile.towerType === "slow",
+          );
+        }
+
+        // Storm jumps to up to two nearby units after the primary impact,
+        // including Mage splash impacts.
+        if (projectile.element === "storm") {
+          const primaryPoint = unitPoint(movedUnits[targetIndex]);
+          movedUnits
+            .map((unit, unitIndex) => ({ unit, unitIndex }))
+            .filter(({ unit, unitIndex }) => unitIndex !== targetIndex && unit.hp > 0)
+            .sort((a, b) => {
+              const distance = (entry: typeof a) => {
+                const location = unitPoint(entry.unit);
+                return Math.hypot(location.x - primaryPoint.x, location.y - primaryPoint.y);
+              };
+              return distance(a) - distance(b);
+            })
+            .slice(0, 2)
+            .forEach(({ unit, unitIndex }) => {
+              const location = unitPoint(unit);
+              if (Math.hypot(location.x - primaryPoint.x, location.y - primaryPoint.y) <= 3) {
+                applyImpactDamage(unitIndex, projectile.damage * 0.45, projectile.element);
+              }
+            });
         }
       }
 
@@ -998,21 +1073,15 @@ export const tick = mutation({
           .filter(({ unit }) => {
             const location = unitPoint(unit);
             const distance = Math.abs(location.x - towerLocation.x) + Math.abs(location.y - towerLocation.y);
-            return unit.hp > 0 && String(unit.ownerId) !== String(state.userId) && distance <= range;
+            return unit.hp > 0 &&
+              String(unit.ownerId) !== String(state.userId) &&
+              distance <= range &&
+              (!config.antiAir || unit.flying === true);
           });
-        const targets = config.splash ? inRange : inRange.slice(0, 1);
-        for (const { unit, unitIndex } of targets) {
+        // Mage fires one projectile whose impact applies to the whole area.
+        const targets = inRange.slice(0, 1);
+        for (const { unit } of targets) {
           const location = unitPoint(unit);
-          // Slow effect is weaker now
-          const slowFactor = mageElement === "frost"
-            ? 0.7 - level * 0.04
-            : config.slow && tower.upgradeBranch === "control" ? 0.75 - level * 0.05 : 1;
-          if (slowFactor < 1 && unit.resistance !== "slow" && unit.resistance !== "all") {
-            movedUnits[unitIndex] = {
-              ...movedUnits[unitIndex],
-              pathProgress: (movedUnits[unitIndex].pathProgress ?? 0) * slowFactor,
-            };
-          }
           nextProjectiles.push({
             id: createId("projectile"),
             towerType: tower.type,
@@ -1089,7 +1158,7 @@ export const tick = mutation({
         const unitCost = UNIT_CONFIG[unit.type]?.cost ?? 0;
         return total + Math.max(1, Math.floor(unitCost * KILL_REWARD_RATE));
       }, 0);
-      const remainingUnits = movedUnits.filter((unit) => unit.hp > 0 && unit.x < GRID_WIDTH - 1);
+      const remainingUnits = movedUnits.filter((unit) => unit.hp > 0 && unitPoint(unit).x < GRID_WIDTH - 1);
       return {
         ...state,
         gold: (isBot ? botGold : state.gold) + incomePayouts * (isBot ? botIncome : state.income) + killGold,

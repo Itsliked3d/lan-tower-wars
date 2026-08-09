@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 type Game = Doc<"games">;
 type Player = Game["players"][number];
-type TowerType = "close" | "far" | "splash" | "slow";
+type TowerType = "close" | "far" | "splash" | "slow" | "anti_air";
 type MageElement = "fire" | "frost" | "storm" | "void";
 type UnitType = "soldier" | "scout" | "runner" | "grunt" | "slinger" | "brute" | "raider" | "juggernaut" | "phantom" | "aura" | "siege_breaker" | "leviathan" | "wraith_lord" | "siege_tank" | "titan" | "doomsday";
 
@@ -36,13 +36,14 @@ const TOWER_INFO: Record<TowerType, { short: string; cost: number; range: string
   far: { short: "Rail", cost: 25, range: "r3 · 4dps", rangeCells: 3, icon: Radar },
   splash: { short: "Mage", cost: 45, range: "r2 · adaptive", rangeCells: 2, icon: Sparkles },
   slow: { short: "Snare", cost: 30, range: "r2 · 3dps · slow", rangeCells: 2, icon: Ruler },
+  anti_air: { short: "Skywatch", cost: 55, range: "r4 · anti-air", rangeCells: 4, icon: Crosshair },
 };
 
 const MAGE_ELEMENT_INFO: Record<MageElement, { label: string; counter: string; icon: typeof Flame; text: string; border: string; background: string; glow: string }> = {
-  fire: { label: "Fire", counter: "breaks splash resist", icon: Flame, text: "text-orange-200", border: "border-orange-300/40", background: "bg-orange-300/10", glow: "shadow-[0_0_10px_2px_rgba(251,146,60,0.35)]" },
-  frost: { label: "Frost", counter: "checks fast units", icon: Snowflake, text: "text-sky-200", border: "border-sky-300/40", background: "bg-sky-300/10", glow: "shadow-[0_0_10px_2px_rgba(56,189,248,0.35)]" },
-  storm: { label: "Storm", counter: "hunts flyers", icon: Zap, text: "text-yellow-200", border: "border-yellow-300/40", background: "bg-yellow-300/10", glow: "shadow-[0_0_10px_2px_rgba(250,204,21,0.35)]" },
-  void: { label: "Void", counter: "pierces heavy resist", icon: Wand, text: "text-fuchsia-200", border: "border-fuchsia-300/40", background: "bg-fuchsia-300/10", glow: "shadow-[0_0_10px_2px_rgba(217,70,239,0.35)]" },
+  fire: { label: "Fire", counter: "burns over time", icon: Flame, text: "text-orange-200", border: "border-orange-300/40", background: "bg-orange-300/10", glow: "shadow-[0_0_10px_2px_rgba(251,146,60,0.35)]" },
+  frost: { label: "Frost", counter: "stacks slow", icon: Snowflake, text: "text-sky-200", border: "border-sky-300/40", background: "bg-sky-300/10", glow: "shadow-[0_0_10px_2px_rgba(56,189,248,0.35)]" },
+  storm: { label: "Storm", counter: "chains to 2 nearby", icon: Zap, text: "text-yellow-200", border: "border-yellow-300/40", background: "bg-yellow-300/10", glow: "shadow-[0_0_10px_2px_rgba(250,204,21,0.35)]" },
+  void: { label: "Void", counter: "ignores armor and resist", icon: Wand, text: "text-fuchsia-200", border: "border-fuchsia-300/40", background: "bg-fuchsia-300/10", glow: "shadow-[0_0_10px_2px_rgba(217,70,239,0.35)]" },
 };
 
 const UNIT_INFO: Record<UnitType, { short: string; cost: number; hp: number; income: number; tier: "budget" | "mid" | "endgame"; maxCharges: number; rechargeSeconds: number; icon: typeof Footprints; flying?: boolean; resistance?: string; aura?: boolean; straightLine?: boolean; towerBreaker?: boolean }> = {
@@ -146,10 +147,10 @@ function EconomyStrip({ player, clock }: { player: Player; clock: number }) {
 }
 
 function ProjectileLayer({ projectiles }: { projectiles: Projectile[] }) {
-  return <>{projectiles.map((p) => { const progress = Math.max(0, Math.min(1, p.progress)); const x = p.x + (p.targetX - p.x) * progress; const y = p.y + (p.targetY - p.y) * progress; const color = p.towerType === "far" ? "bg-violet-300" : p.towerType === "splash" ? "bg-fuchsia-300" : p.towerType === "slow" ? "bg-emerald-300" : "bg-cyan-300"; return <span key={p.id} className={`pointer-events-none absolute z-20 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_8px_3px_currentColor] ${color}`} style={{ left: `${((x + 0.5) / GRID_WIDTH) * 100}%`, top: `${((y + 0.5) / GRID_HEIGHT) * 100}%` }} />; })}</>;
+  return <>{projectiles.map((p) => { const progress = Math.max(0, Math.min(1, p.progress)); const x = p.x + (p.targetX - p.x) * progress; const y = p.y + (p.targetY - p.y) * progress; const towerType = p.towerType as TowerType; const color = towerType === "far" ? "bg-violet-300" : towerType === "splash" ? "bg-fuchsia-300" : towerType === "slow" ? "bg-emerald-300" : towerType === "anti_air" ? "bg-sky-300" : "bg-cyan-300"; return <span key={p.id} className={`pointer-events-none absolute z-20 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_8px_3px_currentColor] ${color}`} style={{ left: `${((x + 0.5) / GRID_WIDTH) * 100}%`, top: `${((y + 0.5) / GRID_HEIGHT) * 100}%` }} />; })}</>;
 }
 
-function GridLane({ player, compact = false, selectedTowerType, selectedMageElement, placementPoint, onCellClick, onCellHover, onTowerClick, selectedTowerId }: { player: Player; compact?: boolean; selectedTowerType?: TowerType | null; selectedMageElement?: MageElement; placementPoint?: GridPoint | null; onCellClick?: (x: number, y: number) => void; onCellHover?: (point: GridPoint | null) => void; onTowerClick?: (towerId: string) => void; selectedTowerId?: string | null }) {
+function GridLane({ player, compact = false, selectedTowerType, selectedMageElement, placementPoint, onCellClick, onCellHover, onTowerClick, onLaneClick, selectedTowerId }: { player: Player; compact?: boolean; selectedTowerType?: TowerType | null; selectedMageElement?: MageElement; placementPoint?: GridPoint | null; onCellClick?: (x: number, y: number) => void; onCellHover?: (point: GridPoint | null) => void; onTowerClick?: (towerId: string) => void; onLaneClick?: () => void; selectedTowerId?: string | null }) {
   const towers = towersOf(player);
   const units = unitsOf(player);
   const projectiles = projectilesOf(player);
@@ -162,7 +163,7 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
   const route = findVisualPath(player.towers);
   const towerMap = new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower]));
 
-  return <div className="relative aspect-[18/10] overflow-hidden rounded-lg border border-white/[0.06] bg-[#040810]">
+  return <div onClick={onLaneClick} className={`relative aspect-[18/10] overflow-hidden rounded-lg border border-white/[0.06] bg-[#040810] ${onLaneClick ? "cursor-pointer transition hover:border-violet-300/30 hover:shadow-[0_0_20px_rgba(167,139,250,0.08)]" : ""}`}>
     <div className="pointer-events-none absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle, rgba(148,163,184,0.8) 1px, transparent 1px)", backgroundSize: `${100 / GRID_WIDTH}% ${100 / GRID_HEIGHT}%` }} />
 
     <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${GRID_WIDTH}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${GRID_HEIGHT}, minmax(0, 1fr))` }}>
@@ -217,6 +218,14 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
             <div className="flex size-full items-center justify-center tower-snare">
               <div className={compact ? "size-[55%] items-center justify-center rounded border border-emerald-300/20 bg-emerald-300/[0.05]" : "size-[60%] items-center justify-center rounded border border-emerald-300/20 bg-emerald-300/[0.05]"} style={{ clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)" }}>
                 <Ruler className={compact ? "size-2.5 text-emerald-300/90 drop-shadow-[0_0_3px_rgba(110,231,183,0.5)]" : "size-3 text-emerald-300/90 drop-shadow-[0_0_3px_rgba(110,231,183,0.5)]"} />
+              </div>
+            </div>
+          )}
+
+          {tower && tower.type === "anti_air" && (
+            <div className="flex size-full items-center justify-center tower-skywatch">
+              <div className={compact ? "flex size-[55%] items-center justify-center rounded-full border border-sky-300/35 bg-sky-300/[0.08]" : "flex size-[60%] items-center justify-center rounded-full border border-sky-300/35 bg-sky-300/[0.08]"}>
+                <Crosshair className={compact ? "size-2.5 text-sky-200 drop-shadow-[0_0_4px_rgba(125,211,252,0.7)]" : "size-3.5 text-sky-200 drop-shadow-[0_0_4px_rgba(125,211,252,0.7)]"} />
               </div>
             </div>
           )}
@@ -456,7 +465,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
       <div className="flex items-center gap-3">
         <div className="flex size-8 items-center justify-center rounded-lg bg-cyan-300/10"><Crosshair className="size-4 text-cyan-300" /></div>
         <div>
-          <span className="font-mono text-[11px] font-bold tracking-[0.15em] text-white">LAN TOWER WARS · V.1.0.2</span>
+          <span className="font-mono text-[11px] font-bold tracking-[0.15em] text-white">LAN TOWER WARS · V.1.0.1.2</span>
           <span className={`ml-2 rounded-md px-1.5 py-0.5 text-[9px] font-semibold ${room.isPractice ? "border border-amber-300/20 bg-amber-300/[0.08] text-amber-200" : "border border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200"}`}>{room.isPractice ? "PRACTICE" : "LIVE"}</span>
         </div>
       </div>
