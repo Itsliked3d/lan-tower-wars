@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useMutation, useQuery } from "convex/react";
 import { Bird, Castle, Coins, Crosshair, Crown, Flame, Footprints, Ghost, Hammer, HelpCircle, LogOut, Radar, Radio, Ruler, Shield, Skull, Snowflake, Sparkles, Swords, Target, Trash2, TrendingUp, Turtle, Users, Wand, Zap } from "lucide-react";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -159,9 +159,8 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
   const placementRange = selectedTowerType ? TOWER_INFO[selectedTowerType].rangeCells : 0;
   const activeRangePoint = selectedTowerPoint ?? placementPoint ?? null;
   const activeRange = selectedTowerPoint ? selectedRange : placementRange;
-  const towerSignature = towers.map((tower) => `${tower.id}:${tower.x ?? ""}:${tower.y ?? ""}:${tower.type}:${tower.element ?? ""}:${tower.upgradeBranch ?? ""}:${tower.upgradeLevel ?? 0}`).join("|");
-  const route = useMemo(() => findVisualPath(player.towers), [towerSignature]);
-  const towerMap = useMemo(() => new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower])), [towerSignature]);
+  const route = findVisualPath(player.towers);
+  const towerMap = new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower]));
 
   return <div className="relative aspect-[18/10] overflow-hidden rounded-lg border border-white/[0.06] bg-[#040810]">
     <div className="pointer-events-none absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle, rgba(148,163,184,0.8) 1px, transparent 1px)", backgroundSize: `${100 / GRID_WIDTH}% ${100 / GRID_HEIGHT}%` }} />
