@@ -10,6 +10,7 @@ const BASE_INCOME = 2;
 const GRID_WIDTH = 14;
 const GRID_HEIGHT = 8;
 const START_POINT = { x: 0, y: 4 };
+const FLYING_PATH: GridPoint[] = Array.from({ length: GRID_WIDTH }, (_, x) => ({ x, y: START_POINT.y }));
 
 type UnitConfig = {
   label: string;
@@ -486,13 +487,10 @@ export const sendUnit = mutation({
     if (!config) throw new Error("Unknown unit type.");
     if (player.gold < config.cost) throw new Error(`You need ${config.cost} gold for that unit.`);
 
-    // Flying units ignore towers — they always have a direct path
+    // Flying units ignore towers — they always have a direct path.
     let path: GridPoint[] | null;
     if (config.flying) {
-      path = [{ x: 0, y: START_POINT.y }];
-      for (let px = 1; px < GRID_WIDTH; px++) {
-        path.push({ x: px, y: START_POINT.y });
-      }
+      path = FLYING_PATH;
     } else {
       path = pathForPlayer(target.towers);
       if (!path) throw new Error(`${target.name}'s route is blocked. They need to open a path first.`);
@@ -605,21 +603,21 @@ export const tick = mutation({
         }
       }
 
-      const route = pathForPlayer(botTowers.length > 0 ? botTowers : state.towers);
-      let laneUnits = isBot ? state.laneUnits : state.laneUnits;
-
       const currentTowers = isBot ? botTowers : state.towers;
+      const groundPathCache = new Map<string, GridPoint[] | null>();
+      const groundPathFor = (start: GridPoint) => {
+        const key = pointKey(start);
+        if (!groundPathCache.has(key)) groundPathCache.set(key, findPath(currentTowers, start));
+        return groundPathCache.get(key) ?? null;
+      };
 
-      const movedUnits = laneUnits.map((unit) => {
+      const movedUnits = state.laneUnits.map((unit) => {
         const start = unitPoint(unit);
-        const path = unit.flying
-          ? [{ x: 0, y: START_POINT.y }, ...Array.from({ length: GRID_WIDTH - 1 }, (_, i) => ({ x: i + 1, y: START_POINT.y }))]
-          : findPath(currentTowers, start);
+        const path = unit.flying ? FLYING_PATH : groundPathFor(start);
         if (!path) return { ...unit, x: start.x, y: start.y };
 
-        // Flying units always path from the origin, so they need their
-        // cumulative pathIndex restored — otherwise distance resets each tick.
-        // Ground units get a fresh path from their current cell, so start at 0.
+        // Flying units use a stable origin-to-goal path and keep cumulative
+        // progress. Ground units recalculate from their current cell.
         let pathIndex = unit.flying ? (unit.pathIndex ?? 0) : 0;
         let pathProgress = (unit.pathProgress ?? 0) + (UNIT_CONFIG[unit.type]?.speed ?? 1) * elapsed;
         while (pathIndex < path.length - 1 && pathProgress >= 1) {

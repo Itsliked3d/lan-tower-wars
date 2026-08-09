@@ -11,6 +11,7 @@ import { toast } from "sonner";
 type Game = Doc<"games">;
 type Player = Game["players"][number];
 type TowerType = "close" | "far" | "splash" | "slow";
+type UnitType = "soldier" | "scout" | "runner" | "grunt" | "slinger" | "brute" | "raider" | "juggernaut" | "phantom" | "siege_breaker" | "leviathan" | "wraith_lord" | "titan" | "doomsday";
 
 type GridPoint = { x: number; y: number };
 type Projectile = NonNullable<Player["projectiles"]>[number];
@@ -24,7 +25,7 @@ const TOWER_INFO: Record<TowerType, { short: string; cost: number; range: string
   slow: { short: "Snare", cost: 30, range: "r2 · 3dps · slow", icon: Ruler },
 };
 
-const UNIT_INFO: Record<string, { short: string; cost: number; hp: number; income: number; tier: string; icon: typeof Footprints; flying?: boolean; resistance?: string }> = {
+const UNIT_INFO: Record<UnitType, { short: string; cost: number; hp: number; income: number; tier: string; icon: typeof Footprints; flying?: boolean; resistance?: string }> = {
   soldier: { short: "Foot Soldier", cost: 5, hp: 14, income: 1, tier: "budget", icon: Footprints },
   scout: { short: "Scout", cost: 8, hp: 8, income: 1, tier: "budget", icon: Zap },
   runner: { short: "Runner", cost: 12, hp: 6, income: 1, tier: "budget", icon: Bird },
@@ -54,15 +55,8 @@ function towerPoint(tower: NonNullable<Player["towers"]>[number]): GridPoint { r
 function unitPoint(unit: NonNullable<Player["laneUnits"]>[number]): GridPoint { return { x: unit.x ?? Math.round((unit.position / 100) * (GRID_WIDTH - 1)), y: unit.y ?? 4 }; }
 function pointKey(point: GridPoint) { return `${point.x}:${point.y}`; }
 
-function findVisualPath(towers: Player["towers"], units?: Player["laneUnits"]): Set<string> {
-  // Flying units take a straight path — they ignore towers
-  if (units?.some((u) => u?.flying)) {
-    const straightPath = new Set<string>();
-    for (let x = 0; x < GRID_WIDTH; x++) {
-      straightPath.add(`${x}:${(units.find((u) => u?.flying)?.y ?? 4)}`);
-    }
-    return straightPath;
-  }
+function findVisualPath(towers: Player["towers"]): Set<string> {
+  // The route overlay shows the ground route; flying units intentionally ignore it.
   return findPathThroughTowers(towers);
 }
 
@@ -164,8 +158,9 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
   const towers = towersOf(player);
   const units = unitsOf(player);
   const projectiles = projectilesOf(player);
-  const route = useMemo(() => findVisualPath(player.towers, player.laneUnits), [player.towers, player.laneUnits]);
-  const towerMap = new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower]));
+  const towerSignature = towers.map((tower) => `${tower.id}:${tower.x ?? ""}:${tower.y ?? ""}:${tower.type}:${tower.upgradeLevel ?? 0}`).join("|");
+  const route = useMemo(() => findVisualPath(player.towers), [towerSignature]);
+  const towerMap = useMemo(() => new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower])), [towerSignature]);
 
   return <div className="relative aspect-[14/8] overflow-hidden rounded-lg border border-white/[0.07] bg-[#060b15]">
     <div className="absolute inset-0 grid grid-cols-14 grid-rows-8">
@@ -180,7 +175,7 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
 
         return <div
           key={cellKey}
-          role="button"
+          role={canBuild || tower ? "button" : undefined}
           tabIndex={canBuild || tower ? 0 : -1}
           onClick={() => { if (canBuild) onCellClick?.(x, y); if (tower && onTowerClick) onTowerClick(tower.id); }}
           className={`relative border-r border-b border-white/[0.04] transition-colors ${isStart ? "bg-cyan-300/[0.05]" : isGoal ? "bg-rose-300/[0.05]" : route.has(cellKey) ? "bg-emerald-300/[0.02]" : ""} ${canBuild ? "cursor-crosshair hover:bg-cyan-300/20" : ""} ${tower && onTowerClick ? "cursor-pointer hover:brightness-125" : ""} ${tower && tower.id === selectedTowerId ? "ring-1 ring-cyan-300/60" : ""}`}
@@ -206,7 +201,7 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
       const isFlying = !!(unit as { flying?: boolean }).flying;
       const Icon = info?.icon || HelpCircle;
       return (
-        <div key={unit.id} className="absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-all duration-1000 ease-linear pointer-events-none"
+        <div key={unit.id} className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-[left,top] duration-1000 ease-linear"
           style={{
             left: `${((pt.x + 0.5) / GRID_WIDTH) * 100}%`,
             top: `${((pt.y + 0.5) / GRID_HEIGHT) * 100}%`,
@@ -225,7 +220,6 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
 
     <ProjectileLayer projectiles={projectiles} />
 
-    {!compact && <div className="pointer-events-none absolute bottom-1.5 left-1/2 -translate-x-1/2 rounded-full border border-emerald-300/10 bg-[#060b15]/80 px-2 py-0.5 text-[8px] text-emerald-200/40">click empty cells to build · click towers to upgrade</div>}
   </div>;
 }
 
@@ -346,7 +340,7 @@ function Lobby({ room, currentUserId, onStart, onLeave, isBusy, error }: { room:
   </Card>;
 }
 
-function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, onLeave, isBusy, error }: { room: Game; currentUserId?: string; onBuild: (type: TowerType, x: number, y: number) => void; onSend: (type: string) => void; onUpgrade: (towerId: string, branch: "power" | "control") => void; onCopy: () => void; onLeave: () => void; isBusy: boolean; error: string | null }) {
+function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, onLeave, isBusy, error }: { room: Game; currentUserId?: string; onBuild: (type: TowerType, x: number, y: number) => void; onSend: (type: UnitType) => void; onUpgrade: (towerId: string, branch: "power" | "control") => void; onCopy: () => void; onLeave: () => void; isBusy: boolean; error: string | null }) {
   const currentIndex = room.players.findIndex((p) => String(p.userId) === currentUserId);
   const player = room.players[currentIndex];
   const nextPlayer = room.players[(currentIndex + 1) % room.players.length];
@@ -472,7 +466,11 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, on
                   <span className="font-mono text-slate-600">{seat.health}%</span>
                 </span>
               </div>
-              <GridLane player={seat} compact />
+              <div className="hidden sm:block"><GridLane player={seat} compact /></div>
+              <div className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.01] px-2.5 py-2 sm:hidden">
+                <span className="font-mono text-[9px] text-slate-500">{unitsOf(seat).length} units · {towersOf(seat).length} walls</span>
+                <span className="font-mono text-[9px] text-emerald-300/80">+{incomeOf(seat)}/tick</span>
+              </div>
             </div>
           ))}
         </CardContent>
@@ -583,7 +581,7 @@ export default function Dashboard() {
         ) : roomStatus === "playing" ? (
           <GameBoard room={room!} currentUserId={currentUserId}
             onBuild={(t, x, y) => run(() => buildTower({ roomCode: roomCode!, towerType: t, x, y }))}
-            onSend={(unitType: string) => run(() => sendUnit({ roomCode: roomCode!, unitType: unitType as "soldier" }))}
+            onSend={(unitType) => run(() => sendUnit({ roomCode: roomCode!, unitType }))}
             onUpgrade={(towerId, branch) => run(() => upgradeTower({ roomCode: roomCode!, towerId, branch }))}
             onCopy={handleCopy} onLeave={handleLeave} isBusy={isBusy} error={error} />
         ) : (
