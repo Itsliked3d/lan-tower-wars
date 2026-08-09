@@ -6,10 +6,10 @@ import { v } from "convex/values";
 const COLORS = ["#fb7185", "#f59e0b", "#22d3ee", "#a78bfa"];
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const STARTING_GOLD = 30;
-const BASE_INCOME = 2;
-const GRID_WIDTH = 14;
-const GRID_HEIGHT = 8;
-const START_POINT = { x: 0, y: 4 };
+const BASE_INCOME = 30;
+const GRID_WIDTH = 18;
+const GRID_HEIGHT = 10;
+const START_POINT = { x: 0, y: 5 };
 
 function flyingPathFor(y: number): GridPoint[] {
   return Array.from({ length: GRID_WIDTH }, (_, x) => ({ x, y }));
@@ -33,20 +33,20 @@ const UNIT_CONFIG: Record<string, UnitConfig> = {
   // ── Budget ──
   soldier: { label: "Foot Soldier", cost: 5, income: 1, hp: 14, speed: 1.25, damage: 8, tier: "budget" },
   scout: { label: "Scout", cost: 8, income: 1, hp: 8, speed: 1.8, damage: 5, tier: "budget" },
-  runner: { label: "Runner", cost: 12, income: 1, hp: 6, speed: 2.6, damage: 6, tier: "budget" },
-  grunt: { label: "Grunt", cost: 25, income: 2, hp: 30, speed: 0.8, damage: 12, tier: "budget", resistance: "splash" },
-  slinger: { label: "Slinger", cost: 35, income: 3, hp: 10, speed: 1.2, damage: 10, tier: "budget", flying: true },
+  runner: { label: "Runner", cost: 12, income: 2, hp: 6, speed: 2.6, damage: 6, tier: "budget" },
+  grunt: { label: "Grunt", cost: 25, income: 5, hp: 30, speed: 0.8, damage: 12, tier: "budget", resistance: "splash" },
+  slinger: { label: "Slinger", cost: 35, income: 7, hp: 10, speed: 1.2, damage: 10, tier: "budget", flying: true },
   // ── Mid-game ──
-  brute: { label: "Brute", cost: 120, income: 8, hp: 200, speed: 0.5, damage: 40, tier: "mid" },
-  raider: { label: "Raider", cost: 250, income: 15, hp: 80, speed: 2.0, damage: 25, tier: "mid", resistance: "slow" },
-  juggernaut: { label: "Juggernaut", cost: 500, income: 25, hp: 500, speed: 0.35, damage: 65, tier: "mid", resistance: "all" },
-  phantom: { label: "Phantom", cost: 350, income: 18, hp: 40, speed: 3.0, damage: 30, tier: "mid", flying: true },
+  brute: { label: "Brute", cost: 120, income: 24, hp: 200, speed: 0.5, damage: 40, tier: "mid" },
+  raider: { label: "Raider", cost: 250, income: 50, hp: 80, speed: 2.0, damage: 25, tier: "mid", resistance: "slow" },
+  juggernaut: { label: "Juggernaut", cost: 500, income: 100, hp: 500, speed: 0.35, damage: 65, tier: "mid", resistance: "all" },
+  phantom: { label: "Phantom", cost: 350, income: 70, hp: 40, speed: 3.0, damage: 30, tier: "mid", flying: true },
   // ── Endgame ──
-  siege_breaker: { label: "Siege Breaker", cost: 2000, income: 60, hp: 1200, speed: 0.3, damage: 120, tier: "endgame" },
-  leviathan: { label: "Leviathan", cost: 5000, income: 120, hp: 3000, speed: 0.2, damage: 200, tier: "endgame", resistance: "splash" },
-  wraith_lord: { label: "Wraith Lord", cost: 8000, income: 150, hp: 500, speed: 2.5, damage: 100, tier: "endgame", flying: true, resistance: "physical" },
-  titan: { label: "Titan", cost: 20000, income: 350, hp: 8000, speed: 0.15, damage: 400, tier: "endgame", resistance: "all" },
-  doomsday: { label: "Doomsday", cost: 50000, income: 500, hp: 15000, speed: 0.1, damage: 800, tier: "endgame" },
+  siege_breaker: { label: "Siege Breaker", cost: 2000, income: 400, hp: 1200, speed: 0.3, damage: 120, tier: "endgame" },
+  leviathan: { label: "Leviathan", cost: 5000, income: 1000, hp: 3000, speed: 0.2, damage: 200, tier: "endgame", resistance: "splash" },
+  wraith_lord: { label: "Wraith Lord", cost: 8000, income: 1600, hp: 500, speed: 2.5, damage: 100, tier: "endgame", flying: true, resistance: "physical" },
+  titan: { label: "Titan", cost: 20000, income: 4000, hp: 8000, speed: 0.15, damage: 400, tier: "endgame", resistance: "all" },
+  doomsday: { label: "Doomsday", cost: 50000, income: 10000, hp: 15000, speed: 0.1, damage: 800, tier: "endgame" },
 
 } as const;
 
@@ -65,7 +65,7 @@ const TOWER_CONFIG = {
   splash: { label: "Mage Tower", cost: 45, range: 2, damage: 6, splash: false, slow: false },
 } as const;
 
-const UPGRADE_COSTS = [30, 80, 200] as const;
+const UPGRADE_COSTS = [75, 225, 600] as const;
 
 type Player = Doc<"games">["players"][number];
 type GridPoint = { x: number; y: number };
@@ -295,7 +295,7 @@ export const createPracticeRoom = mutation({
       ...botBase,
       gold: 20,
       towers: [
-        { id: createId("tower"), type: "close" as const, position: 28, hp: 100, x: 4, y: 4, upgradeLevel: 0 },
+        { id: createId("tower"), type: "close" as const, position: 22, hp: 100, x: 4, y: 5, upgradeLevel: 0 },
         { id: createId("tower"), type: "far" as const, position: 57, hp: 100, x: 8, y: 3, upgradeLevel: 0 },
       ],
     };
@@ -508,7 +508,7 @@ export const upgradeTower = mutation({
     if (tower.upgradeBranch && tower.upgradeBranch !== args.branch) {
       throw new Error("This tower is already committed to the other upgrade branch.");
     }
-    const cost = UPGRADE_COSTS[level] ?? 200;
+    const cost = UPGRADE_COSTS[level] ?? 600;
     if (player.gold < cost) throw new Error(`You need ${cost} gold for this upgrade.`);
 
     const towers = player.towers.map((current, currentIndex) =>
@@ -625,6 +625,10 @@ export const tick = mutation({
     const previousTick = game.lastTick ?? now;
     const elapsed = Math.min(3, Math.max(0, (now - previousTick) / 1000));
     if (elapsed < 0.8) return;
+    const incomePayouts = Math.max(
+      0,
+      Math.floor(now / 15000) - Math.floor(previousTick / 15000),
+    );
 
     const isPractice = game.isPractice === true;
     let leakMessage = "";
@@ -816,7 +820,7 @@ export const tick = mutation({
       const remainingUnits = movedUnits.filter((unit) => unit.hp > 0 && unit.x < GRID_WIDTH - 1);
       return {
         ...state,
-        gold: (isBot ? botGold : state.gold) + Math.floor((isBot ? botIncome : state.income) * elapsed),
+        gold: (isBot ? botGold : state.gold) + incomePayouts * (isBot ? botIncome : state.income),
         income: isBot ? botIncome : state.income,
         health: Math.max(0, state.health - leaked.reduce((total, unit) => total + (UNIT_CONFIG[unit.type]?.damage ?? 5), 0)),
         laneUnits: remainingUnits,

@@ -27,8 +27,8 @@ function mageElementFor(tower: TowerRecord | Projectile): MageElement {
   return tower.element ?? "fire";
 }
 
-const GRID_WIDTH = 14;
-const GRID_HEIGHT = 8;
+const GRID_WIDTH = 18;
+const GRID_HEIGHT = 10;
 
 const TOWER_INFO: Record<TowerType, { short: string; cost: number; range: string; icon: typeof Target }> = {
   close: { short: "Pulse", cost: 15, range: "r1 · 10dps", icon: Target },
@@ -47,31 +47,31 @@ const MAGE_ELEMENT_INFO: Record<MageElement, { label: string; counter: string; i
 const UNIT_INFO: Record<UnitType, { short: string; cost: number; hp: number; income: number; tier: string; icon: typeof Footprints; flying?: boolean; resistance?: string }> = {
   soldier: { short: "Foot Soldier", cost: 5, hp: 14, income: 1, tier: "budget", icon: Footprints },
   scout: { short: "Scout", cost: 8, hp: 8, income: 1, tier: "budget", icon: Zap },
-  runner: { short: "Runner", cost: 12, hp: 6, income: 1, tier: "budget", icon: Bird },
-  grunt: { short: "Grunt", cost: 25, hp: 30, income: 2, tier: "budget", icon: Shield, resistance: "splash" },
-  slinger: { short: "Slinger", cost: 35, hp: 10, income: 3, tier: "budget", icon: Bird, flying: true },
-  brute: { short: "Brute", cost: 120, hp: 200, income: 8, tier: "mid", icon: Turtle },
-  raider: { short: "Raider", cost: 250, hp: 80, income: 15, tier: "mid", icon: Flame, resistance: "slow" },
-  juggernaut: { short: "Juggernaut", cost: 500, hp: 500, income: 25, tier: "mid", icon: Shield, resistance: "all" },
-  phantom: { short: "Phantom", cost: 350, hp: 40, income: 18, tier: "mid", icon: Ghost, flying: true },
-  siege_breaker: { short: "Siege Breaker", cost: 2000, hp: 1200, income: 60, tier: "endgame", icon: Castle },
-  leviathan: { short: "Leviathan", cost: 5000, hp: 3000, income: 120, tier: "endgame", icon: Skull, resistance: "splash" },
-  wraith_lord: { short: "Wraith Lord", cost: 8000, hp: 500, income: 150, tier: "endgame", icon: Ghost, flying: true, resistance: "physical" },
-  titan: { short: "Titan", cost: 20000, hp: 8000, income: 350, tier: "endgame", icon: Castle, resistance: "all" },
-  doomsday: { short: "Doomsday", cost: 50000, hp: 15000, income: 500, tier: "endgame", icon: Skull },
+  runner: { short: "Runner", cost: 12, hp: 6, income: 2, tier: "budget", icon: Bird },
+  grunt: { short: "Grunt", cost: 25, hp: 30, income: 5, tier: "budget", icon: Shield, resistance: "splash" },
+  slinger: { short: "Slinger", cost: 35, hp: 10, income: 7, tier: "budget", icon: Bird, flying: true },
+  brute: { short: "Brute", cost: 120, hp: 200, income: 24, tier: "mid", icon: Turtle },
+  raider: { short: "Raider", cost: 250, hp: 80, income: 50, tier: "mid", icon: Flame, resistance: "slow" },
+  juggernaut: { short: "Juggernaut", cost: 500, hp: 500, income: 100, tier: "mid", icon: Shield, resistance: "all" },
+  phantom: { short: "Phantom", cost: 350, hp: 40, income: 70, tier: "mid", icon: Ghost, flying: true },
+  siege_breaker: { short: "Siege Breaker", cost: 2000, hp: 1200, income: 400, tier: "endgame", icon: Castle },
+  leviathan: { short: "Leviathan", cost: 5000, hp: 3000, income: 1000, tier: "endgame", icon: Skull, resistance: "splash" },
+  wraith_lord: { short: "Wraith Lord", cost: 8000, hp: 500, income: 1600, tier: "endgame", icon: Ghost, flying: true, resistance: "physical" },
+  titan: { short: "Titan", cost: 20000, hp: 8000, income: 4000, tier: "endgame", icon: Castle, resistance: "all" },
+  doomsday: { short: "Doomsday", cost: 50000, hp: 15000, income: 10000, tier: "endgame", icon: Skull },
 };
 const UNIT_MAX_HP: Record<string, number> = Object.fromEntries(Object.entries(UNIT_INFO).map(([k, v]) => [k, v.hp]));
 
-const UPGRADE_COSTS = [30, 80, 200];
+const UPGRADE_COSTS = [75, 225, 600];
 
 function friendlyError(error: unknown) { return error instanceof Error ? error.message.replace(/^Error: /, "") : "Something went wrong."; }
 function goldOf(player: Player) { return player.gold ?? 30; }
-function incomeOf(player: Player) { return player.income ?? 2; }
+function incomeOf(player: Player) { return player.income ?? 30; }
 function unitsOf(player: Player) { return player.laneUnits ?? []; }
 function towersOf(player: Player) { return player.towers ?? []; }
 function projectilesOf(player: Player): Projectile[] { return player.projectiles ?? []; }
-function towerPoint(tower: NonNullable<Player["towers"]>[number]): GridPoint { return { x: tower.x ?? Math.round((tower.position / 100) * (GRID_WIDTH - 1)), y: tower.y ?? 4 }; }
-function unitPoint(unit: NonNullable<Player["laneUnits"]>[number]): GridPoint { return { x: unit.x ?? Math.round((unit.position / 100) * (GRID_WIDTH - 1)), y: unit.y ?? 4 }; }
+function towerPoint(tower: NonNullable<Player["towers"]>[number]): GridPoint { return { x: tower.x ?? Math.round((tower.position / 100) * (GRID_WIDTH - 1)), y: tower.y ?? 5 }; }
+function unitPoint(unit: NonNullable<Player["laneUnits"]>[number]): GridPoint { return { x: unit.x ?? Math.round((unit.position / 100) * (GRID_WIDTH - 1)), y: unit.y ?? 5 }; }
 function pointKey(point: GridPoint) { return `${point.x}:${point.y}`; }
 
 function findVisualPath(towers: Player["towers"]): Set<string> {
@@ -81,7 +81,7 @@ function findVisualPath(towers: Player["towers"]): Set<string> {
 
 function findPathThroughTowers(towers: Player["towers"]): Set<string> {
   const blocked = new Set((towers ?? []).map((tower) => pointKey(towerPoint(tower))));
-  const start = { x: 0, y: 4 };
+  const start = { x: 0, y: 5 };
   const queue: Array<{ point: GridPoint; path: GridPoint[] }> = [{ point: start, path: [start] }];
   const visited = new Set([pointKey(start)]);
   while (queue.length) {
@@ -100,7 +100,7 @@ function findPathThroughTowers(towers: Player["towers"]): Set<string> {
 
 function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: string }) { return <div className="h-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full transition-[width] duration-500 ${color}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>; }
 
-// ── Prominent economy readout: wallet, income rate, and per-tick estimate ──
+// ── Prominent economy readout: wallet, payout income, and 15-second cadence ──
 function EconomyStrip({ player }: { player: Player }) {
   const gold = goldOf(player);
   const income = incomeOf(player);
@@ -115,10 +115,10 @@ function EconomyStrip({ player }: { player: Player }) {
     <div className="flex min-w-0 items-center gap-3">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-emerald-300/25 bg-gradient-to-br from-emerald-400/15 to-emerald-500/5 shadow-[0_0_10px_1px_rgba(52,211,153,0.15)]"><TrendingUp className="size-4 text-emerald-300" /></span>
       <div className="min-w-0">
-        <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-slate-500">Income</p>
-        <p className="font-mono text-xl font-bold leading-tight text-emerald-100">+{income}<span className="ml-1 text-[10px] font-medium text-emerald-300/50">g/s</span></p>
+        <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-slate-500">Income / 15s</p>
+        <p className="font-mono text-xl font-bold leading-tight text-emerald-100">+{income}<span className="ml-1 text-[10px] font-medium text-emerald-300/50">g</span></p>
       </div>
-      <span className="ml-1 hidden shrink-0 rounded-lg border border-emerald-300/10 bg-emerald-300/[0.04] px-2 py-1 text-[9px] font-medium text-emerald-300/70 md:block" title="Estimated payout each tick">≈{income}g/tick</span>
+      <span className="ml-1 hidden shrink-0 rounded-lg border border-emerald-300/10 bg-emerald-300/[0.04] px-2 py-1 text-[9px] font-medium text-emerald-300/70 md:block" title="Gold payout every 15 seconds">+{income}g / 15s</span>
     </div>
   </div>;
 }
@@ -187,11 +187,11 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
   const route = useMemo(() => findVisualPath(player.towers), [towerSignature]);
   const towerMap = useMemo(() => new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower])), [towerSignature]);
 
-  return <div className="relative aspect-[14/8] overflow-hidden rounded-lg border border-white/[0.06] bg-[#040810]">
+  return <div className="relative aspect-[18/10] overflow-hidden rounded-lg border border-white/[0.06] bg-[#040810]">
     {/* Grid dot overlay */}
     <div className="pointer-events-none absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle, rgba(148,163,184,0.8) 1px, transparent 1px)", backgroundSize: `${100 / GRID_WIDTH}% ${100 / GRID_HEIGHT}%` }} />
 
-    <div className="absolute inset-0 grid grid-cols-14 grid-rows-8">
+    <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${GRID_WIDTH}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${GRID_HEIGHT}, minmax(0, 1fr))` }}>
       {Array.from({ length: GRID_WIDTH * GRID_HEIGHT }).map((_, index) => {
         const x = index % GRID_WIDTH;
         const y = Math.floor(index / GRID_WIDTH);
@@ -322,7 +322,7 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
 function TowerUpgradeModal({ tower, player, onUpgrade, onRemove, onClose, isBusy }: { tower: NonNullable<Player["towers"]>[number]; player: Player; onUpgrade: (branch: "power" | "control") => void; onRemove: () => void; onClose: () => void; isBusy: boolean }) {
   const level = tower.upgradeLevel ?? 0;
   const locked = tower.upgradeBranch;
-  const cost = UPGRADE_COSTS[level] ?? 200;
+  const cost = UPGRADE_COSTS[level] ?? 600;
   const gold = goldOf(player);
   const info = towerInfoFor(tower.type);
   const mageElement = tower.type === "splash" ? mageElementFor(tower) : null;
@@ -384,7 +384,7 @@ function PlayerSeat({ player, index, isCurrent, isHost }: { player: Player; inde
             <span className="text-xs font-semibold text-white">{player.name}</span>
             {isCurrent && <span className="rounded-md bg-cyan-400/20 px-1 py-0.5 text-[8px] font-semibold text-cyan-200">YOU</span>}
             {isHost && <Crown className="size-3 text-amber-400 drop-shadow-[0_0_3px_rgba(251,191,36,0.4)]" />}
-            <span className="inline-flex items-center gap-0.5 rounded-md border border-emerald-300/10 bg-emerald-300/[0.04] px-1.5 py-0.5 font-mono text-[8px] text-emerald-300/80" title="Income per tick"><TrendingUp className="size-2" />+{incomeOf(player)}</span>
+            <span className="inline-flex items-center gap-0.5 rounded-md border border-emerald-300/10 bg-emerald-300/[0.04] px-1.5 py-0.5 font-mono text-[8px] text-emerald-300/80" title="Income per 15-second payout"><TrendingUp className="size-2" />+{incomeOf(player)}/15s</span>
           </div>
         </div>
       </div>
@@ -554,7 +554,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
                   </div>
                   <p className="mt-0.5 text-[10px] font-medium text-white leading-tight">{info.short}</p>
                   <p className="text-[8px] text-slate-500">
-                    {info.hp}hp · +{info.income}inc
+                    {info.hp}hp · +{info.income}/15s
                     {info.flying && " · fly"}
                     {info.resistance && ` · ${info.resistance} res`}
                   </p>
@@ -564,7 +564,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
           </div>
 
           <div className="flex items-start gap-1.5 rounded-lg border border-amber-300/10 bg-amber-300/[0.03] p-2 text-[9px] text-amber-100/60">
-            <Coins className="mt-0.5 size-3 shrink-0 text-amber-300" />Sending units permanently increases your income.
+            <Coins className="mt-0.5 size-3 shrink-0 text-amber-300" />Income is paid in one burst every 15 seconds. Expensive units pay more.
           </div>
         </CardContent>
       </Card>
@@ -597,14 +597,14 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
               <div className="mb-1 flex items-center justify-between gap-1 text-[9px]">
                 <span className={i === currentIndex ? "font-semibold text-cyan-100" : "text-slate-400"}>{seat.name}</span>
                 <span className="flex items-center gap-1.5">
-                  <span className="inline-flex items-center gap-0.5 rounded border border-emerald-300/15 bg-emerald-300/[0.05] px-1 py-px font-mono text-[8px] text-emerald-300/80" title="Income per tick"><TrendingUp className="size-2" />+{incomeOf(seat)}</span>
+                  <span className="inline-flex items-center gap-0.5 rounded border border-emerald-300/15 bg-emerald-300/[0.05] px-1 py-px font-mono text-[8px] text-emerald-300/80" title="Income per 15-second payout"><TrendingUp className="size-2" />+{incomeOf(seat)}/15s</span>
                   <span className="font-mono text-slate-600">{seat.health}%</span>
                 </span>
               </div>
               <div className="hidden sm:block"><GridLane player={seat} compact /></div>
               <div className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.01] px-2.5 py-2 sm:hidden">
                 <span className="font-mono text-[9px] text-slate-500">{unitsOf(seat).length} units · {towersOf(seat).length} walls</span>
-                <span className="font-mono text-[9px] text-emerald-300/80">+{incomeOf(seat)}/tick</span>
+                <span className="font-mono text-[9px] text-emerald-300/80">+{incomeOf(seat)}/15s</span>
               </div>
             </div>
           ))}
