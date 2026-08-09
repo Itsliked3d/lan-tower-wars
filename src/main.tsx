@@ -5,12 +5,12 @@ import { InstrumentationProvider } from "@/instrumentation.tsx";
 import { ConvexAuthProvider, useAuthActions } from "@convex-dev/auth/react";
 import { ConvexReactClient, useConvexAuth } from "convex/react";
 import { StrictMode, useEffect, lazy, Suspense } from "react";
+import Dashboard from "./pages/Dashboard.tsx";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import "./index.css";
 
 // Lazy load route components for better code splitting
-const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
