@@ -114,21 +114,6 @@ function findPathThroughTowers(towers: Player["towers"]): Set<string> {
 }
 
 function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: string }) {
-  useEffect(() => {
-    document.querySelectorAll<HTMLElement>("p").forEach((label) => {
-      if (label.textContent?.trim() !== "integrity") return;
-      label.textContent = PLAYER_HP_LABEL;
-      label.className = "text-[8px] font-bold uppercase tracking-[0.16em] text-rose-300/90";
-      const card = label.parentElement;
-      card?.classList.add("rounded-xl", "border-rose-300/25", "bg-rose-300/[0.08]", "shadow-[0_0_14px_1px_rgba(251,113,133,0.1)]");
-      card?.querySelector("p:first-child")?.classList.add("text-base", "font-bold", "text-rose-50");
-    });
-    document.querySelectorAll<HTMLElement>("span.font-mono").forEach((health) => {
-      if (!/^\\d+%$/.test(health.textContent?.trim() ?? "")) return;
-      health.textContent = `${health.textContent?.trim().replace("%", "")} hp`;
-      health.className = "font-mono text-rose-200/80";
-    });
-  }, [value]);
   return <div className="h-2 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10" aria-label={`HP ${Math.round(value)}`}><div className={`h-full rounded-full transition-[width] duration-500 ${color} shadow-[0_0_10px_2px_currentColor]`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>;
 }
 
@@ -219,6 +204,21 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
   const towers = towersOf(player);
   const units = unitsOf(player);
   const projectiles = projectilesOf(player);
+  useEffect(() => {
+    document.querySelectorAll<HTMLElement>("p").forEach((label) => {
+      if (label.textContent?.trim() !== "integrity") return;
+      label.textContent = PLAYER_HP_LABEL;
+      label.className = "text-[8px] font-bold uppercase tracking-[0.16em] text-rose-300/90";
+      const card = label.parentElement;
+      card?.classList.add("rounded-xl", "border-rose-300/25", "bg-rose-300/[0.08]", "shadow-[0_0_14px_1px_rgba(251,113,133,0.1)]");
+      card?.querySelector("p:first-child")?.classList.add("text-base", "font-bold", "text-rose-50");
+    });
+    document.querySelectorAll<HTMLElement>("span.font-mono").forEach((health) => {
+      if (!/^\\d+%$/.test(health.textContent?.trim() ?? "")) return;
+      health.textContent = `${health.textContent?.trim().replace("%", "")} hp`;
+      health.className = "font-mono text-rose-200/80";
+    });
+  }, [player.health]);
   const towerSignature = towers.map((tower) => `${tower.id}:${tower.x ?? ""}:${tower.y ?? ""}:${tower.type}:${tower.element ?? ""}:${tower.upgradeLevel ?? 0}`).join("|");
   const route = useMemo(() => findVisualPath(player.towers), [towerSignature]);
   const towerMap = useMemo(() => new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower])), [towerSignature]);
