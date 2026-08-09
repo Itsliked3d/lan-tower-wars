@@ -919,7 +919,7 @@ export const tick = mutation({
       const leaked = movedUnits.filter((unit) => unit.x === GRID_WIDTH - 1 && unit.hp > 0);
       if (leaked.length > 0) {
         const damage = leaked.reduce((total, unit) => total + (UNIT_CONFIG[unit.type]?.damage ?? 5), 0);
-        leakMessage = `${state.name} lost ${damage} integrity. The attackers continue to the next lane.`;
+        leakMessage = `${state.name} lost ${damage} hp. The attackers continue to the next lane.`;
 
         // Lanes form a gameplay loop: a surviving unit is re-spawned at the
         // next living player's entry and keeps its remaining HP and owner.
@@ -950,7 +950,7 @@ export const tick = mutation({
           }
         }
 
-        // A living sender steals back the integrity dealt by their units.
+        // A living sender steals back the hp dealt by their units.
         // Eliminated players stay eliminated; healing never resurrects them.
         for (const unit of leaked) {
           if (!unit.ownerId) continue;

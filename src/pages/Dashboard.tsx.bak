@@ -580,7 +580,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
         <CardContent className="pt-3 space-y-3">
           <GridLane player={player} selectedTowerType={selectedTowerType} selectedMageElement={selectedMageElement} onCellClick={(x, y) => onBuild(selectedTowerType, x, y, selectedTowerType === "splash" ? selectedMageElement : undefined)} onTowerClick={(id) => setSelectedTowerId(id === selectedTowerId ? null : id)} selectedTowerId={selectedTowerId} />
           <div className="grid grid-cols-3 gap-1.5 text-center">
-            <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-white">{player.health}</p><p className="text-[8px] text-slate-600">integrity</p></div>
+            <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-white">{player.health}</p><p className="text-[8px] text-slate-600">hp</p></div>
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-cyan-100">{myTowers.length}</p><p className="text-[8px] text-slate-600">walls</p></div>
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-amber-100">{unitsOf(player).length}</p><p className="text-[8px] text-slate-600">units</p></div>
           </div>
