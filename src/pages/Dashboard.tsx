@@ -426,7 +426,7 @@ function Lobby({ room, currentUserId, onStart, onLeave, isBusy, error }: { room:
   const isPractice = !!(room as unknown as { isPractice?: boolean }).isPractice;
   return <Card className="mx-auto w-full max-w-3xl border-white/[0.06] bg-gradient-to-b from-[#0d1528] to-[#0b1120] shadow-xl">
     <CardHeader className="border-b border-white/[0.05] pb-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.2em] text-cyan-300">
             <span className="flex size-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_6px_2px_rgba(34,211,238,0.5)]" />
