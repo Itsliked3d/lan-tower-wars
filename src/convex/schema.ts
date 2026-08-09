@@ -2,7 +2,6 @@ import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { Infer, v } from "convex/values";
 
-// default user roles. can add / remove based on the project as needed
 export const ROLES = {
   ADMIN: "admin",
   USER: "user",
@@ -16,33 +15,59 @@ export const roleValidator = v.union(
 );
 export type Role = Infer<typeof roleValidator>;
 
+const unitTypeValidator = v.union(
+  v.literal("soldier"),
+  v.literal("scout"),
+);
+
+const towerTypeValidator = v.union(
+  v.literal("close"),
+  v.literal("far"),
+);
+
+const laneUnitValidator = v.object({
+  id: v.string(),
+  type: unitTypeValidator,
+  position: v.number(),
+  hp: v.number(),
+});
+
+const towerValidator = v.object({
+  id: v.string(),
+  type: towerTypeValidator,
+  position: v.number(),
+  hp: v.number(),
+});
+
 const playerValidator = v.object({
   userId: v.id("users"),
   name: v.string(),
   color: v.string(),
   health: v.number(),
+  // Legacy pass-along counters remain so existing rooms can migrate safely.
   units: v.number(),
   incoming: v.number(),
   shield: v.number(),
   sent: v.number(),
   defended: v.number(),
+  gold: v.optional(v.number()),
+  income: v.optional(v.number()),
+  laneUnits: v.optional(v.array(laneUnitValidator)),
+  towers: v.optional(v.array(towerValidator)),
 });
 
 const schema = defineSchema(
   {
-    // default auth tables using convex auth.
-    ...authTables, // do not remove or modify
+    ...authTables,
 
-    // the users table is the default users table that is brought in by the authTables
     users: defineTable({
-      name: v.optional(v.string()), // name of the user. do not remove
-      image: v.optional(v.string()), // image of the user. do not remove
-      email: v.optional(v.string()), // email of the user. do not remove
-      emailVerificationTime: v.optional(v.number()), // email verification time. do not remove
-      isAnonymous: v.optional(v.boolean()), // is the user anonymous. do not remove
-
-      role: v.optional(roleValidator), // role of the user. do not remove
-    }).index("email", ["email"]), // index for the email. do not remove or modify
+      name: v.optional(v.string()),
+      image: v.optional(v.string()),
+      email: v.optional(v.string()),
+      emailVerificationTime: v.optional(v.number()),
+      isAnonymous: v.optional(v.boolean()),
+      role: v.optional(roleValidator),
+    }).index("email", ["email"]),
 
     games: defineTable({
       roomCode: v.string(),
@@ -56,11 +81,11 @@ const schema = defineSchema(
       players: v.array(playerValidator),
       lastAction: v.string(),
       updatedAt: v.number(),
+      // The simulation advances lazily when a connected client calls tick.
+      lastTick: v.optional(v.number()),
     }).index("by_room_code", ["roomCode"]),
   },
-  {
-    schemaValidation: false,
-  },
+  { schemaValidation: false },
 );
 
 export default schema;
