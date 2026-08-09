@@ -37,6 +37,20 @@ type TowerLike = {
   upgradeLevel?: number;
 };
 
+type ProjectileLike = {
+  id: string;
+  towerType: keyof typeof TOWER_CONFIG;
+  targetUnitId: string;
+  x: number;
+  y: number;
+  targetX: number;
+  targetY: number;
+  progress: number;
+  speed: number;
+  damage: number;
+  splash?: boolean;
+};
+
 function cleanName(name: string) {
   return name.trim().slice(0, 18) || "Player";
 }
@@ -62,6 +76,7 @@ function normalizePlayer(player: Player) {
     income: player.income ?? BASE_INCOME,
     laneUnits: player.laneUnits ?? [],
     towers: player.towers ?? [],
+    projectiles: player.projectiles ?? [],
   };
 }
 
@@ -80,6 +95,7 @@ function createPlayer(userId: Player["userId"], name: string, color: string) {
     income: BASE_INCOME,
     laneUnits: [],
     towers: [],
+    projectiles: [],
   };
 }
 
@@ -498,6 +514,30 @@ export const tick = mutation({
         };
       });
 
+      const nextProjectiles: ProjectileLike[] = [];
+      for (const projectile of (state.projectiles ?? []) as ProjectileLike[]) {
+        const progress = projectile.progress + projectile.speed * elapsed;
+        if (progress < 1) {
+          nextProjectiles.push({ ...projectile, progress });
+          continue;
+        }
+
+        const targetIndex = movedUnits.findIndex((unit) => unit.id === projectile.targetUnitId);
+        if (targetIndex < 0) continue;
+        if (projectile.splash) {
+          const impactPoint = unitPoint(movedUnits[targetIndex]);
+          movedUnits.forEach((unit, unitIndex) => {
+            const location = unitPoint(unit);
+            if (Math.abs(location.x - impactPoint.x) + Math.abs(location.y - impactPoint.y) <= 1) {
+              movedUnits[unitIndex] = { ...unit, hp: unit.hp - projectile.damage };
+            }
+          });
+        } else {
+          const target = movedUnits[targetIndex];
+          movedUnits[targetIndex] = { ...target, hp: target.hp - projectile.damage };
+        }
+      }
+
       for (const tower of state.towers) {
         const config = TOWER_CONFIG[tower.type];
         const level = tower.upgradeLevel ?? 0;
@@ -513,12 +553,25 @@ export const tick = mutation({
           });
         const targets = config.splash ? inRange : inRange.slice(0, 1);
         for (const { unit, unitIndex } of targets) {
+          const location = unitPoint(unit);
           const slowFactor = config.slow && tower.upgradeBranch === "control" ? 0.65 : 1;
           movedUnits[unitIndex] = {
-            ...unit,
-            hp: unit.hp - damage * elapsed,
-            pathProgress: (unit.pathProgress ?? 0) * slowFactor,
+            ...movedUnits[unitIndex],
+            pathProgress: (movedUnits[unitIndex].pathProgress ?? 0) * slowFactor,
           };
+          nextProjectiles.push({
+            id: createId("projectile"),
+            towerType: tower.type,
+            targetUnitId: unit.id,
+            x: towerLocation.x,
+            y: towerLocation.y,
+            targetX: location.x,
+            targetY: location.y,
+            progress: 0,
+            speed: 2.8,
+            damage: damage * elapsed,
+            splash: config.splash,
+          });
         }
       }
 
@@ -538,6 +591,7 @@ export const tick = mutation({
         health: Math.max(0, state.health - leaked.reduce((total, unit) => total + UNIT_CONFIG[unit.type].damage, 0)),
         laneUnits: remainingUnits,
         incoming: remainingUnits.length,
+        projectiles: nextProjectiles,
       };
     });
 

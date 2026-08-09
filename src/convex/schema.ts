@@ -65,6 +65,20 @@ const towerValidator = v.object({
   upgradeLevel: v.optional(v.number()),
 });
 
+const projectileValidator = v.object({
+  id: v.string(),
+  towerType: towerTypeValidator,
+  targetUnitId: v.string(),
+  x: v.number(),
+  y: v.number(),
+  targetX: v.number(),
+  targetY: v.number(),
+  progress: v.number(),
+  speed: v.number(),
+  damage: v.number(),
+  splash: v.optional(v.boolean()),
+});
+
 const playerValidator = v.object({
   userId: v.id("users"),
   name: v.string(),
@@ -79,6 +93,7 @@ const playerValidator = v.object({
   income: v.optional(v.number()),
   laneUnits: v.optional(v.array(laneUnitValidator)),
   towers: v.optional(v.array(towerValidator)),
+  projectiles: v.optional(v.array(projectileValidator)),
 });
 
 const schema = defineSchema(
