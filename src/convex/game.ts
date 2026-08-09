@@ -239,6 +239,10 @@ function mageDamageMultiplier(element: MageElement, unit: { type: string; flying
   return 1;
 }
 
+function playerDamageForUnit(unit: { type: string }) {
+  return (UNIT_CONFIG[unit.type]?.cost ?? 0) >= 10_000 ? 5 : 1;
+}
+
 function pointKey(point: GridPoint) {
   return `${point.x}:${point.y}`;
 }
@@ -918,7 +922,7 @@ export const tick = mutation({
 
       const leaked = movedUnits.filter((unit) => unit.x === GRID_WIDTH - 1 && unit.hp > 0);
       if (leaked.length > 0) {
-        const damage = leaked.reduce((total, unit) => total + (UNIT_CONFIG[unit.type]?.damage ?? 5), 0);
+        const damage = leaked.reduce((total, unit) => total + playerDamageForUnit(unit), 0);
         const damageDealt = Math.min(state.health, damage);
         leakMessage = `${state.name} lost ${damageDealt} hp. The attackers continue to the next lane.`;
 
@@ -958,7 +962,7 @@ export const tick = mutation({
           if (remainingDamageToSteal <= 0 || !unit.ownerId) continue;
           const owner = game.players.find((candidate) => candidate.userId === unit.ownerId);
           if (!owner || owner.health <= 0) continue;
-          const unitDamage = Math.min(UNIT_CONFIG[unit.type]?.damage ?? 5, remainingDamageToSteal);
+          const unitDamage = Math.min(playerDamageForUnit(unit), remainingDamageToSteal);
           stolenHealthByOwner.set(
             String(unit.ownerId),
             (stolenHealthByOwner.get(String(unit.ownerId)) ?? 0) + unitDamage,
@@ -978,7 +982,7 @@ export const tick = mutation({
         gold: (isBot ? botGold : state.gold) + incomePayouts * (isBot ? botIncome : state.income) + killGold,
         income: isBot ? botIncome : state.income,
         unitCharges: isBot ? botUnitCharges : refreshedUnitCharges,
-        health: Math.max(0, state.health - leaked.reduce((total, unit) => total + (UNIT_CONFIG[unit.type]?.damage ?? 5), 0)),
+        health: Math.max(0, state.health - leaked.reduce((total, unit) => total + playerDamageForUnit(unit), 0)),
         laneUnits: remainingUnits,
         incoming: remainingUnits.length,
         towers: isBot ? botTowers : state.towers,
