@@ -18,12 +18,21 @@ export type Role = Infer<typeof roleValidator>;
 const unitTypeValidator = v.union(
   v.literal("soldier"),
   v.literal("scout"),
+  v.literal("brute"),
+  v.literal("runner"),
   v.literal("abuse_control"),
 );
 
 const towerTypeValidator = v.union(
   v.literal("close"),
   v.literal("far"),
+  v.literal("splash"),
+  v.literal("slow"),
+);
+
+const upgradeBranchValidator = v.union(
+  v.literal("power"),
+  v.literal("control"),
 );
 
 const gridPointValidator = v.object({
@@ -52,6 +61,8 @@ const towerValidator = v.object({
   hp: v.number(),
   x: v.optional(v.number()),
   y: v.optional(v.number()),
+  upgradeBranch: v.optional(upgradeBranchValidator),
+  upgradeLevel: v.optional(v.number()),
 });
 
 const playerValidator = v.object({

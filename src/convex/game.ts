@@ -7,24 +7,35 @@ const COLORS = ["#fb7185", "#f59e0b", "#22d3ee", "#a78bfa"];
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const STARTING_GOLD = 30;
 const BASE_INCOME = 2;
-const GRID_WIDTH = 10;
-const GRID_HEIGHT = 6;
-const START_POINT = { x: 0, y: 3 };
+const GRID_WIDTH = 14;
+const GRID_HEIGHT = 8;
+const START_POINT = { x: 0, y: 4 };
 
 const UNIT_CONFIG = {
   soldier: { label: "Foot soldier", cost: 5, income: 1, hp: 14, speed: 1.25, damage: 8 },
   scout: { label: "Scout", cost: 8, income: 1, hp: 8, speed: 1.8, damage: 5 },
+  brute: { label: "Brute", cost: 18, income: 2, hp: 42, speed: 0.72, damage: 18 },
+  runner: { label: "Runner", cost: 12, income: 1, hp: 6, speed: 2.6, damage: 6 },
   abuse_control: { label: "Abuse Control", cost: 0, income: 0, hp: 18, speed: 1.45, damage: 2 },
 } as const;
 
 const TOWER_CONFIG = {
-  close: { label: "Close-range tower", cost: 15, range: 1, damage: 10 },
-  far: { label: "Long-range tower", cost: 25, range: 3, damage: 4 },
+  close: { label: "Pulse Tower", cost: 15, range: 1, damage: 10, splash: false, slow: false },
+  far: { label: "Rail Tower", cost: 25, range: 3, damage: 4, splash: false, slow: false },
+  splash: { label: "Arc Tower", cost: 35, range: 2, damage: 6, splash: true, slow: false },
+  slow: { label: "Snare Tower", cost: 30, range: 2, damage: 3, splash: false, slow: true },
 } as const;
 
 type Player = Doc<"games">["players"][number];
 type GridPoint = { x: number; y: number };
-type TowerLike = { x?: number; y?: number; position: number };
+type TowerLike = {
+  x?: number;
+  y?: number;
+  position: number;
+  type?: keyof typeof TOWER_CONFIG;
+  upgradeBranch?: "power" | "control";
+  upgradeLevel?: number;
+};
 
 function cleanName(name: string) {
   return name.trim().slice(0, 18) || "Player";
@@ -257,7 +268,12 @@ export const startGame = mutation({
 export const buildTower = mutation({
   args: {
     roomCode: v.string(),
-    towerType: v.union(v.literal("close"), v.literal("far")),
+    towerType: v.union(
+      v.literal("close"),
+      v.literal("far"),
+      v.literal("splash"),
+      v.literal("slow"),
+    ),
     x: v.optional(v.number()),
     y: v.optional(v.number()),
   },
@@ -291,6 +307,7 @@ export const buildTower = mutation({
       hp: 100,
       x,
       y,
+      upgradeLevel: 0,
     };
     const proposedTowers = [...player.towers, tower];
     if (!findPath(proposedTowers, START_POINT)) {
@@ -313,10 +330,58 @@ export const buildTower = mutation({
   },
 });
 
+export const upgradeTower = mutation({
+  args: {
+    roomCode: v.string(),
+    towerId: v.string(),
+    branch: v.union(v.literal("power"), v.literal("control")),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx);
+    const game = await getGame(ctx, args.roomCode);
+    if (game.status !== "playing") throw new Error("The battle is not live yet.");
+    const index = game.players.findIndex((player) => player.userId === userId);
+    if (index < 0) throw new Error("You are not in this room.");
+
+    const player = normalizePlayer(game.players[index]);
+    const towerIndex = player.towers.findIndex((tower) => tower.id === args.towerId);
+    if (towerIndex < 0) throw new Error("That tower is no longer on your lane.");
+    const tower = player.towers[towerIndex];
+    const level = tower.upgradeLevel ?? 0;
+    if (level >= 3) throw new Error("That tower has reached maximum level.");
+    if (tower.upgradeBranch && tower.upgradeBranch !== args.branch) {
+      throw new Error("This tower is already committed to the other upgrade branch.");
+    }
+    const cost = 20 + level * 15;
+    if (player.gold < cost) throw new Error(`You need ${cost} gold for this upgrade.`);
+
+    const towers = player.towers.map((current, currentIndex) =>
+      currentIndex === towerIndex
+        ? { ...current, upgradeBranch: args.branch, upgradeLevel: level + 1 }
+        : current,
+    );
+    const players = game.players.map((current, currentIndex) =>
+      currentIndex === index
+        ? { ...player, gold: player.gold - cost, towers }
+        : normalizePlayer(current),
+    );
+    await ctx.db.patch(game._id, {
+      players,
+      lastAction: `${player.name} upgraded a ${TOWER_CONFIG[tower.type].label} on the ${args.branch} branch to level ${level + 1}.`,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const sendUnit = mutation({
   args: {
     roomCode: v.string(),
-    unitType: v.union(v.literal("soldier"), v.literal("scout")),
+    unitType: v.union(
+      v.literal("soldier"),
+      v.literal("scout"),
+      v.literal("brute"),
+      v.literal("runner"),
+    ),
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
@@ -435,15 +500,25 @@ export const tick = mutation({
 
       for (const tower of state.towers) {
         const config = TOWER_CONFIG[tower.type];
+        const level = tower.upgradeLevel ?? 0;
+        const range = config.range + (tower.upgradeBranch === "control" ? level : 0);
+        const damage = config.damage * (1 + (tower.upgradeBranch === "power" ? level * 0.35 : 0));
         const towerLocation = towerPoint(tower);
-        const targetIndex = movedUnits.findIndex((unit) => {
-          const location = unitPoint(unit);
-          const distance = Math.abs(location.x - towerLocation.x) + Math.abs(location.y - towerLocation.y);
-          return unit.hp > 0 && distance <= config.range;
-        });
-        if (targetIndex >= 0) {
-          const target = movedUnits[targetIndex];
-          movedUnits[targetIndex] = { ...target, hp: target.hp - config.damage * elapsed };
+        const inRange = movedUnits
+          .map((unit, unitIndex) => ({ unit, unitIndex }))
+          .filter(({ unit }) => {
+            const location = unitPoint(unit);
+            const distance = Math.abs(location.x - towerLocation.x) + Math.abs(location.y - towerLocation.y);
+            return unit.hp > 0 && distance <= range;
+          });
+        const targets = config.splash ? inRange : inRange.slice(0, 1);
+        for (const { unit, unitIndex } of targets) {
+          const slowFactor = config.slow && tower.upgradeBranch === "control" ? 0.65 : 1;
+          movedUnits[unitIndex] = {
+            ...unit,
+            hp: unit.hp - damage * elapsed,
+            pathProgress: (unit.pathProgress ?? 0) * slowFactor,
+          };
         }
       }
 

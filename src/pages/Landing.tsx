@@ -23,7 +23,7 @@ const steps = [
     number: "02",
     icon: Zap,
     title: "Build the maze",
-    text: "Spend gold on physical towers, then click the lane to shape a route. You can slow the enemy, but you cannot seal the goal.",
+    text: "Spend gold across four tower types and four unit classes, then click the expanded 14 × 8 lane to shape a route. Upgrade each tower down a power or control branch, but never seal the goal.",
   },
   {
     number: "03",
@@ -74,7 +74,7 @@ export default function Landing() {
               <span className="block text-cyan-200">Hold your tower.</span>
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-slate-400 sm:text-xl">
-              LAN Tower Wars is a fast, local multiplayer tower-defense game for friends on the same network. Earn gold, build a physical maze, send units next door, and survive the Abuse Control audit.
+              LAN Tower Wars is a fast, local multiplayer tower-defense game for friends on the same network. Earn gold, choose from a wider roster, build a physical maze on a larger grid, send units next door, and survive the Abuse Control audit.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <button
@@ -136,7 +136,7 @@ export default function Landing() {
             <div>
               <p className="font-mono text-xs tracking-[0.25em] text-cyan-200/70">THE WHOLE LOOP</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Small rules. Big coordination.</h2>
-            </div>              <p className="max-w-sm text-sm leading-6 text-slate-500">No tech tree. No loadouts. Just a shared screen, a room code, a growing gold income, and the pressure of building a maze that still works.</p>
+            </div>              <p className="max-w-sm text-sm leading-6 text-slate-500">Four unit profiles. Four tower profiles. Two upgrade philosophies. Just a shared screen, a room code, a growing gold income, and the pressure of building a maze that still works.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {steps.map(({ number, icon: Icon, title, text }) => (
