@@ -919,7 +919,8 @@ export const tick = mutation({
       const leaked = movedUnits.filter((unit) => unit.x === GRID_WIDTH - 1 && unit.hp > 0);
       if (leaked.length > 0) {
         const damage = leaked.reduce((total, unit) => total + (UNIT_CONFIG[unit.type]?.damage ?? 5), 0);
-        leakMessage = `${state.name} lost ${damage} hp. The attackers continue to the next lane.`;
+        const damageDealt = Math.min(state.health, damage);
+        leakMessage = `${state.name} lost ${damageDealt} hp. The attackers continue to the next lane.`;
 
         // Lanes form a gameplay loop: a surviving unit is re-spawned at the
         // next living player's entry and keeps its remaining HP and owner.
@@ -952,15 +953,17 @@ export const tick = mutation({
 
         // A living sender steals back the hp dealt by their units.
         // Eliminated players stay eliminated; healing never resurrects them.
+        let remainingDamageToSteal = damageDealt;
         for (const unit of leaked) {
-          if (!unit.ownerId) continue;
+          if (remainingDamageToSteal <= 0 || !unit.ownerId) continue;
           const owner = game.players.find((candidate) => candidate.userId === unit.ownerId);
           if (!owner || owner.health <= 0) continue;
-          const unitDamage = UNIT_CONFIG[unit.type]?.damage ?? 5;
+          const unitDamage = Math.min(UNIT_CONFIG[unit.type]?.damage ?? 5, remainingDamageToSteal);
           stolenHealthByOwner.set(
             String(unit.ownerId),
             (stolenHealthByOwner.get(String(unit.ownerId)) ?? 0) + unitDamage,
           );
+          remainingDamageToSteal -= unitDamage;
         }
       }
 
