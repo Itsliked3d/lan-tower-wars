@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useMutation, useQuery } from "convex/react";
-import { Bird, Castle, Coins, Crosshair, Crown, Flame, Footprints, Ghost, Hammer, HelpCircle, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, Turtle, Users, Zap } from "lucide-react";
+import { Bird, Castle, Coins, Crosshair, Crown, Flame, Footprints, Ghost, Hammer, HelpCircle, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, TrendingUp, Turtle, Users, Zap } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -87,18 +87,26 @@ function findPathThroughTowers(towers: Player["towers"]): Set<string> {
 
 function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: string }) { return <div className="h-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full transition-[width] duration-500 ${color}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>; }
 
-function EconomyPill({ player, compact }: { player: Player; compact?: boolean }) {
+// ── Prominent economy readout: wallet, income rate, and per-tick estimate ──
+function EconomyStrip({ player }: { player: Player }) {
   const gold = goldOf(player);
   const income = incomeOf(player);
-  if (compact) return <div className="flex items-center gap-2 rounded-lg border border-white/8 bg-white/[0.02] px-2 py-1 font-mono text-[11px]">
-    <span className="flex items-center gap-1 text-amber-200" title="Current gold balance"><Coins className="size-3" />{gold}</span>
-    <span className="h-3 w-px bg-white/10" />
-    <span className="text-emerald-300" title="Income generated per second">+{income}/s</span>
-  </div>;
-  return <div className="flex items-center gap-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.05] px-3 py-2">
-    <div className="flex items-center gap-1.5 text-amber-200"><Coins className="size-3.5" /><span className="font-mono text-sm font-semibold">{gold}</span></div>
-    <div className="h-4 w-px bg-white/10" />
-    <span className="font-mono text-[11px] text-emerald-300">+{income}/s</span>
+  return <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/[0.07] bg-[#0b1120]/90 px-3 py-2.5 sm:flex sm:items-center sm:justify-between sm:gap-4 sm:px-4">
+    <div className="flex min-w-0 items-center gap-2.5">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-amber-300/20 bg-amber-300/10"><Coins className="size-4 text-amber-300" /></span>
+      <div className="min-w-0">
+        <p className="text-[8px] font-medium uppercase tracking-[0.18em] text-slate-500">Wallet</p>
+        <p className="truncate font-mono text-lg font-semibold leading-tight text-amber-100 sm:text-xl">{gold}<span className="ml-1 text-[10px] font-normal text-amber-200/50">g</span></p>
+      </div>
+    </div>
+    <div className="flex min-w-0 items-center justify-end gap-2.5 sm:justify-start">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-emerald-300/20 bg-emerald-300/10"><TrendingUp className="size-4 text-emerald-300" /></span>
+      <div className="min-w-0">
+        <p className="text-[8px] font-medium uppercase tracking-[0.18em] text-slate-500">Income</p>
+        <p className="font-mono text-lg font-semibold leading-tight text-emerald-100 sm:text-xl">+{income}<span className="ml-1 text-[10px] font-normal text-emerald-200/50">g/s</span></p>
+      </div>
+      <span className="ml-1 hidden shrink-0 rounded-md border border-emerald-300/15 bg-emerald-300/[0.06] px-1.5 py-1 text-[9px] font-medium text-emerald-200/80 md:block" title="Estimated payout each tick">≈{income}g / tick</span>
+    </div>
   </div>;
 }
 
@@ -364,11 +372,13 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, on
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <EconomyPill player={player} compact />
         <button type="button" onClick={onCopy} className="hidden rounded border border-white/8 bg-white/[0.02] px-2 py-1 font-mono text-[10px] tracking-[0.1em] text-slate-400 hover:border-cyan-300/30 sm:block">{room.roomCode}</button>
         <Button type="button" variant="ghost" size="icon" onClick={onLeave} className="size-7 text-slate-500 hover:text-rose-200"><LogOut className="size-3.5" /></Button>
       </div>
     </div>
+
+    {/* Economy — always visible, full width */}
+    <EconomyStrip player={player} />
 
     {/* Three-column layout */}
     <div className="grid gap-4 xl:grid-cols-[0.85fr_1.6fr_0.85fr]">
@@ -441,11 +451,10 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, on
         </CardHeader>
         <CardContent className="pt-3 space-y-3">
           <GridLane player={player} selectedTowerType={selectedTowerType} onCellClick={(x, y) => onBuild(selectedTowerType, x, y)} onTowerClick={(id) => setSelectedTowerId(id === selectedTowerId ? null : id)} selectedTowerId={selectedTowerId} />
-          <div className="grid grid-cols-2 gap-1.5 text-center sm:grid-cols-4">
+          <div className="grid grid-cols-3 gap-1.5 text-center">
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-white">{player.health}</p><p className="text-[8px] text-slate-600">integrity</p></div>
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-cyan-100">{myTowers.length}</p><p className="text-[8px] text-slate-600">walls</p></div>
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-amber-100">{unitsOf(player).length}</p><p className="text-[8px] text-slate-600">units</p></div>
-            <div className="rounded-lg border border-emerald-300/10 bg-emerald-300/[0.03] p-2"><p className="font-mono text-sm text-emerald-200">+{incomeOf(player)}</p><p className="text-[8px] text-slate-600">income / sec</p></div>
           </div>
         </CardContent>
       </Card>
