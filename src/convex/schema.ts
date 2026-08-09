@@ -20,6 +20,16 @@ const unitTypeValidator = v.union(
   v.literal("scout"),
   v.literal("brute"),
   v.literal("runner"),
+  v.literal("grunt"),
+  v.literal("slinger"),
+  v.literal("raider"),
+  v.literal("juggernaut"),
+  v.literal("phantom"),
+  v.literal("siege_breaker"),
+  v.literal("leviathan"),
+  v.literal("wraith_lord"),
+  v.literal("titan"),
+  v.literal("doomsday"),
   v.literal("abuse_control"),
 );
 
@@ -51,6 +61,8 @@ const laneUnitValidator = v.object({
   path: v.optional(v.array(gridPointValidator)),
   pathIndex: v.optional(v.number()),
   pathProgress: v.optional(v.number()),
+  flying: v.optional(v.boolean()),
+  resistance: v.optional(v.union(v.literal("splash"), v.literal("slow"), v.literal("physical"), v.literal("all"))),
 });
 
 const towerValidator = v.object({
@@ -123,6 +135,7 @@ const schema = defineSchema(
       updatedAt: v.number(),
       lastTick: v.optional(v.number()),
       lastAbuseControlSpawn: v.optional(v.number()),
+      isPractice: v.optional(v.boolean()),
     }).index("by_room_code", ["roomCode"]),
   },
   { schemaValidation: false },

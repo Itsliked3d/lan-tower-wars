@@ -11,12 +11,37 @@ const GRID_WIDTH = 14;
 const GRID_HEIGHT = 8;
 const START_POINT = { x: 0, y: 4 };
 
-const UNIT_CONFIG = {
-  soldier: { label: "Foot soldier", cost: 5, income: 1, hp: 14, speed: 1.25, damage: 8 },
-  scout: { label: "Scout", cost: 8, income: 1, hp: 8, speed: 1.8, damage: 5 },
-  brute: { label: "Brute", cost: 18, income: 2, hp: 42, speed: 0.72, damage: 18 },
-  runner: { label: "Runner", cost: 12, income: 1, hp: 6, speed: 2.6, damage: 6 },
-  abuse_control: { label: "Abuse Control", cost: 0, income: 0, hp: 18, speed: 1.45, damage: 2 },
+type UnitConfig = {
+  label: string;
+  cost: number;
+  income: number;
+  hp: number;
+  speed: number;
+  damage: number;
+  tier: "budget" | "mid" | "endgame";
+  flying?: boolean;
+  resistance?: "splash" | "slow" | "physical" | "all";
+};
+
+const UNIT_CONFIG: Record<string, UnitConfig> = {
+  // ── Budget ──
+  soldier: { label: "Foot Soldier", cost: 5, income: 1, hp: 14, speed: 1.25, damage: 8, tier: "budget" },
+  scout: { label: "Scout", cost: 8, income: 1, hp: 8, speed: 1.8, damage: 5, tier: "budget" },
+  runner: { label: "Runner", cost: 12, income: 1, hp: 6, speed: 2.6, damage: 6, tier: "budget" },
+  grunt: { label: "Grunt", cost: 25, income: 2, hp: 30, speed: 0.8, damage: 12, tier: "budget", resistance: "splash" },
+  slinger: { label: "Slinger", cost: 35, income: 3, hp: 10, speed: 1.2, damage: 10, tier: "budget", flying: true },
+  // ── Mid-game ──
+  brute: { label: "Brute", cost: 120, income: 8, hp: 200, speed: 0.5, damage: 40, tier: "mid" },
+  raider: { label: "Raider", cost: 250, income: 15, hp: 80, speed: 2.0, damage: 25, tier: "mid", resistance: "slow" },
+  juggernaut: { label: "Juggernaut", cost: 500, income: 25, hp: 500, speed: 0.35, damage: 65, tier: "mid", resistance: "all" },
+  phantom: { label: "Phantom", cost: 350, income: 18, hp: 40, speed: 3.0, damage: 30, tier: "mid", flying: true },
+  // ── Endgame ──
+  siege_breaker: { label: "Siege Breaker", cost: 2000, income: 60, hp: 1200, speed: 0.3, damage: 120, tier: "endgame" },
+  leviathan: { label: "Leviathan", cost: 5000, income: 120, hp: 3000, speed: 0.2, damage: 200, tier: "endgame", resistance: "splash" },
+  wraith_lord: { label: "Wraith Lord", cost: 8000, income: 150, hp: 500, speed: 2.5, damage: 100, tier: "endgame", flying: true, resistance: "physical" },
+  titan: { label: "Titan", cost: 20000, income: 350, hp: 8000, speed: 0.15, damage: 400, tier: "endgame", resistance: "all" },
+  doomsday: { label: "Doomsday", cost: 50000, income: 500, hp: 15000, speed: 0.1, damage: 800, tier: "endgame" },
+  abuse_control: { label: "Abuse Control", cost: 0, income: 0, hp: 18, speed: 1.45, damage: 2, tier: "budget" },
 } as const;
 
 const TOWER_CONFIG = {
@@ -25,6 +50,8 @@ const TOWER_CONFIG = {
   splash: { label: "Arc Tower", cost: 35, range: 2, damage: 6, splash: true, slow: false },
   slow: { label: "Snare Tower", cost: 30, range: 2, damage: 3, splash: false, slow: true },
 } as const;
+
+const UPGRADE_COSTS = [30, 80, 200] as const;
 
 type Player = Doc<"games">["players"][number];
 type GridPoint = { x: number; y: number };
@@ -162,8 +189,8 @@ function pathForPlayer(towers: Player["towers"]) {
 }
 
 async function requireUser(ctx: MutationCtx) {
-  const userId = await getAuthUserId(ctx);
-  if (userId === null) throw new Error("You need to be signed in to play.");
+  const userId = await getAuthUserId(ctx); 
+  if (userId === null) throw new Error("Sign in first — even anonymous access counts.");
   return userId;
 }
 
@@ -213,6 +240,41 @@ export const createRoom = mutation({
       players: [createPlayer(userId, args.name, COLORS[0])],
       lastAction: "Match created. Draw a route through the grid when the room goes live.",
       updatedAt: now,
+    });
+    return roomCode;
+  },
+});
+
+export const createPracticeRoom = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx);
+    const roomCode = createRoomCode();
+    const now = Date.now();
+
+    // Create a bot player with a fake userId
+    const botId = `bot-${createId("bot")}` as Doc<"users">["_id"];
+    const botBase = createPlayer(botId, "BOT", COLORS[1]);
+    const bot: Player = {
+      ...botBase,
+      gold: 20,
+      towers: [
+        { id: createId("tower"), type: "close" as const, position: 28, hp: 100, x: 4, y: 4, upgradeLevel: 0 },
+        { id: createId("tower"), type: "far" as const, position: 57, hp: 100, x: 8, y: 3, upgradeLevel: 0 },
+      ],
+    };
+
+    await ctx.db.insert("games", {
+      roomCode,
+      status: "playing",
+      maxPlayers: 2,
+      wave: 1,
+      players: [createPlayer(userId, args.name, COLORS[0]), bot],
+      lastAction: "Practice mode — hone your maze against the bot.",
+      updatedAt: now,
+      lastTick: now,
+      lastAbuseControlSpawn: now,
+      isPractice: true,
     });
     return roomCode;
   },
@@ -329,8 +391,9 @@ export const buildTower = mutation({
     if (!findPath(proposedTowers, START_POINT)) {
       throw new Error("That tower would seal the route. Leave at least one path to the goal.");
     }
-    if (player.laneUnits.some((unit) => !findPath(proposedTowers, unitPoint(unit)))) {
-      throw new Error("That tower would strand a unit already on the lane.");
+    // Only check non-flying units for stranding
+    if (player.laneUnits.some((unit) => !(unit.flying) && !findPath(proposedTowers, unitPoint(unit)))) {
+      throw new Error("That tower would strand a ground unit already on the lane.");
     }
 
     const players = game.players.map((current, currentIndex) =>
@@ -340,7 +403,7 @@ export const buildTower = mutation({
     );
     await ctx.db.patch(game._id, {
       players,
-      lastAction: `${player.name} built a ${config.label} at grid ${x + 1}/${y + 1}. The route remains open.`,
+      lastAction: `${player.name} built a ${config.label}`,
       updatedAt: Date.now(),
     });
   },
@@ -368,7 +431,7 @@ export const upgradeTower = mutation({
     if (tower.upgradeBranch && tower.upgradeBranch !== args.branch) {
       throw new Error("This tower is already committed to the other upgrade branch.");
     }
-    const cost = 20 + level * 15;
+    const cost = UPGRADE_COSTS[level] ?? 200;
     if (player.gold < cost) throw new Error(`You need ${cost} gold for this upgrade.`);
 
     const towers = player.towers.map((current, currentIndex) =>
@@ -383,21 +446,33 @@ export const upgradeTower = mutation({
     );
     await ctx.db.patch(game._id, {
       players,
-      lastAction: `${player.name} upgraded a ${TOWER_CONFIG[tower.type].label} on the ${args.branch} branch to level ${level + 1}.`,
+      lastAction: `${player.name} upgraded ${TOWER_CONFIG[tower.type].label} ${args.branch} → L${level + 1}`,
       updatedAt: Date.now(),
     });
   },
 });
 
+const ALL_SENDABLE_UNITS = v.union(
+  v.literal("soldier"),
+  v.literal("scout"),
+  v.literal("runner"),
+  v.literal("grunt"),
+  v.literal("slinger"),
+  v.literal("brute"),
+  v.literal("raider"),
+  v.literal("juggernaut"),
+  v.literal("phantom"),
+  v.literal("siege_breaker"),
+  v.literal("leviathan"),
+  v.literal("wraith_lord"),
+  v.literal("titan"),
+  v.literal("doomsday"),
+);
+
 export const sendUnit = mutation({
   args: {
     roomCode: v.string(),
-    unitType: v.union(
-      v.literal("soldier"),
-      v.literal("scout"),
-      v.literal("brute"),
-      v.literal("runner"),
-    ),
+    unitType: ALL_SENDABLE_UNITS,
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
@@ -410,9 +485,20 @@ export const sendUnit = mutation({
     const player = normalizePlayer(game.players[index]);
     const target = normalizePlayer(game.players[targetIndex]);
     const config = UNIT_CONFIG[args.unitType];
+    if (!config) throw new Error("Unknown unit type.");
     if (player.gold < config.cost) throw new Error(`You need ${config.cost} gold for that unit.`);
-    const path = pathForPlayer(target.towers);
-    if (!path) throw new Error(`${target.name}'s route is blocked. They need to open a path first.`);
+
+    // Flying units ignore towers — they always have a direct path
+    let path: GridPoint[] | null;
+    if (config.flying) {
+      path = [{ x: 0, y: START_POINT.y }];
+      for (let px = 1; px < GRID_WIDTH; px++) {
+        path.push({ x: px, y: START_POINT.y });
+      }
+    } else {
+      path = pathForPlayer(target.towers);
+      if (!path) throw new Error(`${target.name}'s route is blocked. They need to open a path first.`);
+    }
 
     const unit = {
       id: createId(args.unitType),
@@ -424,6 +510,8 @@ export const sendUnit = mutation({
       path,
       pathIndex: 0,
       pathProgress: 0,
+      flying: config.flying ?? false,
+      resistance: config.resistance,
     };
     const players = game.players.map((current, currentIndex) => {
       if (currentIndex === index) {
@@ -445,7 +533,7 @@ export const sendUnit = mutation({
     });
     await ctx.db.patch(game._id, {
       players,
-      lastAction: `${player.name} deployed a ${config.label} to ${target.name}. Income increased by ${config.income}.`,
+      lastAction: `${player.name} sent ${config.label} → ${target.name}`,
       updatedAt: Date.now(),
     });
   },
@@ -462,14 +550,68 @@ export const tick = mutation({
     const elapsed = Math.min(3, Math.max(0, (now - previousTick) / 1000));
     if (elapsed < 0.8) return;
 
+    const isPractice = game.isPractice === true;
     const previousAbuse = game.lastAbuseControlSpawn;
     const abuseDue = previousAbuse !== undefined && now - previousAbuse >= 10000;
     let abuseMessage = "";
     let leakMessage = "";
+
+    const botPendingUnits: Array<Record<string, unknown>> = [];
+
     const players = game.players.map((player) => {
       const state = normalizePlayer(player);
-      const route = pathForPlayer(state.towers);
-      let laneUnits = state.laneUnits;
+      const isBot = String(player.userId).startsWith("bot-");
+
+      // Bot AI: auto-build and send units
+      let botGold = state.gold;
+      let botTowers = state.towers;
+      let botIncome = state.income;
+      let botSent = state.sent;
+
+      if (isPractice && isBot) {
+        // Bot builds a tower every ~15s if it has gold
+        if (Math.random() < 0.15 && botGold >= TOWER_CONFIG.close.cost) {
+          const botX = Math.floor(Math.random() * (GRID_WIDTH - 2)) + 1;
+          const botY = Math.floor(Math.random() * GRID_HEIGHT);
+          const proposed = [...botTowers, { id: createId("tower"), type: "close" as const, position: 0, hp: 100, x: botX, y: botY, upgradeLevel: 0 }];
+          if (findPath(proposed, START_POINT)) {
+            botTowers = proposed;
+            botGold -= TOWER_CONFIG.close.cost;
+          }
+        }
+        // Bot sends a unit every ~8s
+        if (Math.random() < 0.12) {
+          const types = ["soldier", "scout", "runner", "grunt"];
+          const pick = types[Math.floor(Math.random() * types.length)];
+          const cfg = UNIT_CONFIG[pick];
+          if (botGold >= cfg.cost) {
+            botGold -= cfg.cost;
+            botIncome += cfg.income;
+            botSent += 1;
+            const humanPlayer = game.players[0];
+            const humanState = normalizePlayer(humanPlayer);
+            const route = pathForPlayer(humanState.towers);
+            if (route) {
+              botPendingUnits.push({
+                id: createId(pick),
+                type: pick,
+                position: 0,
+                hp: cfg.hp,
+                x: START_POINT.x,
+                y: START_POINT.y,
+                path: route,
+                pathIndex: 0,
+                pathProgress: 0,
+                flying: cfg.flying ?? false,
+                resistance: cfg.resistance,
+              });
+            }
+          }
+        }
+      }
+
+      const route = pathForPlayer(botTowers.length > 0 ? botTowers : state.towers);
+      let laneUnits = isBot ? state.laneUnits : state.laneUnits;
 
       if (abuseDue && route) {
         laneUnits = [
@@ -484,20 +626,25 @@ export const tick = mutation({
             path: route,
             pathIndex: 0,
             pathProgress: 0,
+            flying: false,
           },
         ];
-        abuseMessage = `Abuse Control scan: PASS — ${state.name}'s route reaches the goal.`;
+        abuseMessage = `Abuse Control: ${state.name}'s route reaches the goal.`;
       } else if (abuseDue) {
-        abuseMessage = `Abuse Control scan: FAIL — ${state.name}'s route is blocked.`;
+        abuseMessage = `Abuse Control: ${state.name}'s route is BLOCKED.`;
       }
+
+      const currentTowers = isBot ? botTowers : state.towers;
 
       const movedUnits = laneUnits.map((unit) => {
         const start = unitPoint(unit);
-        const path = findPath(state.towers, start);
+        const path = unit.flying
+          ? [{ x: 0, y: START_POINT.y }, ...Array.from({ length: GRID_WIDTH - 1 }, (_, i) => ({ x: i + 1, y: START_POINT.y }))]
+          : findPath(currentTowers, start);
         if (!path) return { ...unit, x: start.x, y: start.y };
 
         let pathIndex = 0;
-        let pathProgress = (unit.pathProgress ?? 0) + UNIT_CONFIG[unit.type].speed * elapsed;
+        let pathProgress = (unit.pathProgress ?? 0) + (UNIT_CONFIG[unit.type]?.speed ?? 1) * elapsed;
         while (pathIndex < path.length - 1 && pathProgress >= 1) {
           pathIndex += 1;
           pathProgress -= 1;
@@ -524,25 +671,38 @@ export const tick = mutation({
 
         const targetIndex = movedUnits.findIndex((unit) => unit.id === projectile.targetUnitId);
         if (targetIndex < 0) continue;
+        const targetUnit = movedUnits[targetIndex];
+
+        // Handle resistances
+        let effectiveDamage = projectile.damage;
+        if (targetUnit.resistance === "all" || targetUnit.resistance === "physical") {
+          effectiveDamage *= 0.5;
+        }
+        if (projectile.splash && targetUnit.resistance === "splash") {
+          effectiveDamage *= 0.3;
+        }
+
         if (projectile.splash) {
           const impactPoint = unitPoint(movedUnits[targetIndex]);
           movedUnits.forEach((unit, unitIndex) => {
             const location = unitPoint(unit);
             if (Math.abs(location.x - impactPoint.x) + Math.abs(location.y - impactPoint.y) <= 1) {
-              movedUnits[unitIndex] = { ...unit, hp: unit.hp - projectile.damage };
+              let dmg = projectile.damage;
+              if (unit.resistance === "all") dmg *= 0.5;
+              if (unit.resistance === "splash") dmg *= 0.3;
+              movedUnits[unitIndex] = { ...unit, hp: unit.hp - dmg };
             }
           });
         } else {
-          const target = movedUnits[targetIndex];
-          movedUnits[targetIndex] = { ...target, hp: target.hp - projectile.damage };
+          movedUnits[targetIndex] = { ...targetUnit, hp: targetUnit.hp - effectiveDamage };
         }
       }
 
-      for (const tower of state.towers) {
+      for (const tower of currentTowers) {
         const config = TOWER_CONFIG[tower.type];
         const level = tower.upgradeLevel ?? 0;
         const range = config.range + (tower.upgradeBranch === "control" ? level : 0);
-        const damage = config.damage * (1 + (tower.upgradeBranch === "power" ? level * 0.35 : 0));
+        const damage = config.damage * (1 + (tower.upgradeBranch === "power" ? level * 0.2 : 0));
         const towerLocation = towerPoint(tower);
         const inRange = movedUnits
           .map((unit, unitIndex) => ({ unit, unitIndex }))
@@ -554,11 +714,14 @@ export const tick = mutation({
         const targets = config.splash ? inRange : inRange.slice(0, 1);
         for (const { unit, unitIndex } of targets) {
           const location = unitPoint(unit);
-          const slowFactor = config.slow && tower.upgradeBranch === "control" ? 0.65 : 1;
-          movedUnits[unitIndex] = {
-            ...movedUnits[unitIndex],
-            pathProgress: (movedUnits[unitIndex].pathProgress ?? 0) * slowFactor,
-          };
+          // Slow effect is weaker now
+          const slowFactor = config.slow && tower.upgradeBranch === "control" ? 0.75 - level * 0.05 : 1;
+          if (unit.resistance !== "slow" && unit.resistance !== "all") {
+            movedUnits[unitIndex] = {
+              ...movedUnits[unitIndex],
+              pathProgress: (movedUnits[unitIndex].pathProgress ?? 0) * slowFactor,
+            };
+          }
           nextProjectiles.push({
             id: createId("projectile"),
             towerType: tower.type,
@@ -577,27 +740,42 @@ export const tick = mutation({
 
       const leaked = movedUnits.filter((unit) => unit.x === GRID_WIDTH - 1 && unit.hp > 0);
       if (leaked.length > 0) {
-        const damage = leaked.reduce((total, unit) => total + UNIT_CONFIG[unit.type].damage, 0);
+        const damage = leaked.reduce((total, unit) => total + (UNIT_CONFIG[unit.type]?.damage ?? 5), 0);
         const abuseReached = leaked.some((unit) => unit.type === "abuse_control");
         leakMessage = abuseReached
           ? `Abuse Control reached ${state.name}'s goal — route confirmed.`
-          : `${state.name} lost ${damage} tower integrity to a lane breach.`;
+          : `${state.name} lost ${damage} integrity.`;
       }
 
       const remainingUnits = movedUnits.filter((unit) => unit.hp > 0 && unit.x < GRID_WIDTH - 1);
       return {
         ...state,
-        gold: state.gold + Math.floor(state.income * elapsed),
-        health: Math.max(0, state.health - leaked.reduce((total, unit) => total + UNIT_CONFIG[unit.type].damage, 0)),
+        gold: (isBot ? botGold : state.gold) + Math.floor((isBot ? botIncome : state.income) * elapsed),
+        income: isBot ? botIncome : state.income,
+        health: Math.max(0, state.health - leaked.reduce((total, unit) => total + (UNIT_CONFIG[unit.type]?.damage ?? 5), 0)),
         laneUnits: remainingUnits,
         incoming: remainingUnits.length,
+        towers: isBot ? botTowers : state.towers,
+        sent: isBot ? botSent : state.sent,
         projectiles: nextProjectiles,
       };
     });
 
-    const ended = players.some((player) => player.health <= 0);
+    // Inject bot's pending units into the human player's lane
+    const finalPlayers = players.map((p, idx) => {
+      if (idx === 0 && game.isPractice && botPendingUnits.length > 0) {
+        return {
+          ...p,
+          laneUnits: [...(p.laneUnits ?? []), ...botPendingUnits] as typeof p.laneUnits,
+          incoming: (p.incoming ?? 0) + botPendingUnits.length,
+        };
+      }
+      return p;
+    });
+
+    const ended = finalPlayers.some((p) => p.health <= 0);
     await ctx.db.patch(game._id, {
-      players,
+      players: finalPlayers,
       lastTick: now,
       lastAbuseControlSpawn: abuseDue ? now : previousAbuse,
       status: ended ? "ended" : "playing",
@@ -607,7 +785,7 @@ export const tick = mutation({
   },
 });
 
-// Keep the former action names available while already-open clients upgrade.
+// Legacy stubs
 export const sendUnits = mutation({
   args: { roomCode: v.string(), amount: v.number() },
   handler: async () => {

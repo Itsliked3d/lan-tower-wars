@@ -4,40 +4,49 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { useMutation, useQuery } from "convex/react";
-import { motion } from "framer-motion";
-import { AlertTriangle, ArrowRight, Castle, ChevronRight, CircleDollarSign, Coins, Crosshair, Crown, DoorOpen, Footprints, Hammer, LogOut, Radar, Radio, Ruler, Sparkles, Swords, Target, Users, Wifi, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { AlertTriangle, Castle, Coins, Crosshair, Crown, Flame, Footprints, Hammer, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, Zap } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
 type Game = Doc<"games">;
 type Player = Game["players"][number];
 type TowerType = "close" | "far" | "splash" | "slow";
-type UnitType = "soldier" | "scout" | "brute" | "runner" | "abuse_control";
+
 type GridPoint = { x: number; y: number };
 type Projectile = NonNullable<Player["projectiles"]>[number];
 const GRID_WIDTH = 14;
 const GRID_HEIGHT = 8;
-const TOWER_INFO: Record<TowerType, { short: string; cost: number; range: string; detail: string }> = {
-  close: { short: "Pulse Tower", cost: 15, range: "1-cell range · 10 DPS", detail: "Fast close defense" },
-  far: { short: "Rail Tower", cost: 25, range: "3-cell range · 4 DPS", detail: "Long sightline" },
-  splash: { short: "Arc Tower", cost: 35, range: "2-cell radius · 6 DPS", detail: "Hits every unit nearby" },
-  slow: { short: "Snare Tower", cost: 30, range: "2-cell range · 3 DPS", detail: "Control tower · slows" },
+
+const TOWER_INFO: Record<TowerType, { short: string; cost: number; range: string; icon: typeof Target }> = {
+  close: { short: "Pulse", cost: 15, range: "r1 · 10dps", icon: Target },
+  far: { short: "Rail", cost: 25, range: "r3 · 4dps", icon: Radar },
+  splash: { short: "Arc", cost: 35, range: "r2 · 6dps · AOE", icon: Sparkles },
+  slow: { short: "Snare", cost: 30, range: "r2 · 3dps · slow", icon: Ruler },
 };
-const UNIT_INFO: Record<Exclude<UnitType, "abuse_control">, { short: string; cost: number; detail: string }> = {
-  soldier: { short: "Foot soldier", cost: 5, detail: "14 HP · +1 income" },
-  scout: { short: "Scout", cost: 8, detail: "Fast · +1 income" },
-  brute: { short: "Brute", cost: 18, detail: "42 HP · +2 income · slow" },
-  runner: { short: "Runner", cost: 12, detail: "Very fast · +1 income" },
+
+const UNIT_INFO: Record<string, { short: string; cost: number; hp: number; income: number; tier: string; icon: typeof Footprints; flying?: boolean; resistance?: string }> = {
+  soldier: { short: "Foot Soldier", cost: 5, hp: 14, income: 1, tier: "budget", icon: Footprints },
+  scout: { short: "Scout", cost: 8, hp: 8, income: 1, tier: "budget", icon: Zap },
+  runner: { short: "Runner", cost: 12, hp: 6, income: 1, tier: "budget", icon: Zap },
+  grunt: { short: "Grunt", cost: 25, hp: 30, income: 2, tier: "budget", icon: Shield, resistance: "splash" },
+  slinger: { short: "Slinger", cost: 35, hp: 10, income: 3, tier: "budget", icon: Zap, flying: true },
+  brute: { short: "Brute", cost: 120, hp: 200, income: 8, tier: "mid", icon: Castle },
+  raider: { short: "Raider", cost: 250, hp: 80, income: 15, tier: "mid", icon: Flame, resistance: "slow" },
+  juggernaut: { short: "Juggernaut", cost: 500, hp: 500, income: 25, tier: "mid", icon: Shield, resistance: "all" },
+  phantom: { short: "Phantom", cost: 350, hp: 40, income: 18, tier: "mid", icon: Sparkles, flying: true },
+  siege_breaker: { short: "Siege Breaker", cost: 2000, hp: 1200, income: 60, tier: "endgame", icon: Castle },
+  leviathan: { short: "Leviathan", cost: 5000, hp: 3000, income: 120, tier: "endgame", icon: Skull, resistance: "splash" },
+  wraith_lord: { short: "Wraith Lord", cost: 8000, hp: 500, income: 150, tier: "endgame", icon: Sparkles, flying: true, resistance: "physical" },
+  titan: { short: "Titan", cost: 20000, hp: 8000, income: 350, tier: "endgame", icon: Shield, resistance: "all" },
+  doomsday: { short: "Doomsday", cost: 50000, hp: 15000, income: 500, tier: "endgame", icon: Skull },
 };
-const UNIT_MAX_HP: Record<UnitType, number> = {
-  soldier: 14,
-  scout: 8,
-  brute: 42,
-  runner: 6,
-  abuse_control: 18,
-};
+const UNIT_MAX_HP: Record<string, number> = Object.fromEntries(Object.entries(UNIT_INFO).map(([k, v]) => [k, v.hp]));
+
+const UPGRADE_COSTS = [30, 80, 200];
 
 function friendlyError(error: unknown) { return error instanceof Error ? error.message.replace(/^Error: /, "") : "Something went wrong."; }
 function goldOf(player: Player) { return player.gold ?? 30; }
@@ -67,43 +76,400 @@ function findVisualPath(towers: Player["towers"]): Set<string> {
   }
   return new Set();
 }
-function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: string }) { return <div className="h-1.5 overflow-hidden rounded-full bg-white/10"><motion.div animate={{ width: `${Math.max(0, Math.min(100, value))}%` }} className={`h-full rounded-full ${color}`} /></div>; }
-function EconomyPill({ player }: { player: Player }) { return <div className="flex items-center gap-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.07] px-4 py-2.5"><div className="flex items-center gap-2 text-amber-200"><Coins className="size-4" /><span className="font-mono text-lg font-semibold">{goldOf(player)}</span><span className="text-[10px] uppercase tracking-widest text-amber-200/60">gold</span></div><div className="h-5 w-px bg-white/10" /><div className="text-right"><p className="font-mono text-sm text-emerald-300">+{incomeOf(player)}/s</p><p className="text-[9px] uppercase tracking-widest text-slate-600">income</p></div></div>; }
 
-function GridLane({ player, compact = false, selectedTowerType, onCellClick }: { player: Player; compact?: boolean; selectedTowerType?: TowerType; onCellClick?: (x: number, y: number) => void }) {
+function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: string }) { return <div className="h-1 overflow-hidden rounded-full bg-white/10"><motion.div animate={{ width: `${Math.max(0, Math.min(100, value))}%` }} className={`h-full rounded-full ${color}`} /></div>; }
+
+function EconomyPill({ player, compact }: { player: Player; compact?: boolean }) {
+  const gold = goldOf(player);
+  const income = incomeOf(player);
+  if (compact) return <span className="font-mono text-xs text-amber-200"><Coins className="mr-1 inline size-3" />{gold}</span>;
+  return <div className="flex items-center gap-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.05] px-3 py-2">
+    <div className="flex items-center gap-1.5 text-amber-200"><Coins className="size-3.5" /><span className="font-mono text-sm font-semibold">{gold}</span></div>
+    <div className="h-4 w-px bg-white/10" />
+    <span className="font-mono text-[11px] text-emerald-300">+{income}/s</span>
+  </div>;
+}
+
+// ── Themed projectiles ──
+function ProjectileLayer({ projectiles }: { projectiles: Projectile[] }) {
+  return (
+    <>
+      {projectiles.map((p) => {
+        const progress = Math.max(0, Math.min(1, p.progress));
+        const x = p.x + (p.targetX - p.x) * progress;
+        const y = p.y + (p.targetY - p.y) * progress;
+        const left = `${((x + 0.5) / GRID_WIDTH) * 100}%`;
+        const top = `${((y + 0.5) / GRID_HEIGHT) * 100}%`;
+
+        if (p.towerType === "close") {
+          // Pulse: expanding ring wave
+          return <div key={p.id} className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2" style={{ left, top }}>
+            <motion.div initial={{ scale: 0.4, opacity: 0.9 }} animate={{ scale: 1.6, opacity: 0 }} transition={{ duration: 0.8, ease: "easeOut" }} className="size-6 rounded-full border-2 border-cyan-300/70 shadow-[0_0_12px_4px_rgba(34,211,238,0.5)]" />
+          </div>;
+        }
+
+        if (p.towerType === "far") {
+          // Rail: laser beam line
+          const angle = Math.atan2(p.targetY - p.y, p.targetX - p.x) * (180 / Math.PI);
+          const length = Math.sqrt((p.targetX - p.x) ** 2 + (p.targetY - p.y) ** 2) * 100 / GRID_WIDTH;
+          return <div key={p.id} className="pointer-events-none absolute z-20 origin-left" style={{ left, top, transform: `rotate(${angle}deg)`, width: `${length}%` }}>
+            <div className="h-[2px] bg-gradient-to-r from-violet-300 via-violet-100 to-transparent shadow-[0_0_8px_2px_rgba(167,139,250,0.7)]" />
+          </div>;
+        }
+
+        if (p.towerType === "splash") {
+          // Arc: lightning bolt
+          return <div key={p.id} className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2" style={{ left, top }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" className="drop-shadow-[0_0_8px_rgba(251,146,60,0.8)]">
+              <motion.path d="M10 2 L4 14 L11 13 L8 22 L20 10 L13 11 Z" fill="#fb923c" initial={{ opacity: 0.6 }} animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 0.3, repeat: Infinity }} />
+            </svg>
+          </div>;
+        }
+
+        // Snare: net
+        return <div key={p.id} className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2" style={{ left, top }}>
+          <motion.div initial={{ rotate: 0, scale: 0.6 }} animate={{ rotate: 45, scale: 1.2 }} transition={{ duration: 0.6, ease: "easeOut" }} className="size-4 border border-emerald-300/60 shadow-[0_0_6px_2px_rgba(110,231,183,0.4)]" style={{ clipPath: "polygon(0 0, 100% 0, 100% 100%, 0 100%)" }}>
+            <div className="absolute inset-0 grid grid-cols-3 grid-rows-3">
+              {Array.from({ length: 9 }).map((_, i) => <div key={i} className="border-[0.5px] border-emerald-300/30" />)}
+            </div>
+          </motion.div>
+        </div>;
+      })}
+    </>
+  );
+}
+
+// ── Grid lane with smooth unit movement ──
+function GridLane({ player, compact = false, selectedTowerType, onCellClick, onTowerClick, selectedTowerId }: { player: Player; compact?: boolean; selectedTowerType?: TowerType; onCellClick?: (x: number, y: number) => void; onTowerClick?: (towerId: string) => void; selectedTowerId?: string | null }) {
   const towers = towersOf(player);
   const units = unitsOf(player);
   const projectiles = projectilesOf(player);
   const route = useMemo(() => findVisualPath(player.towers), [player.towers]);
   const towerMap = new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower]));
-  const unitMap = new Map<string, NonNullable<Player["laneUnits"]>[number]>();
-  units.forEach((unit) => unitMap.set(pointKey(unitPoint(unit)), unit));
-  return <div className="relative aspect-[14/8] overflow-hidden rounded-xl border border-white/10 bg-[#080d19]"><div className="absolute inset-0 grid grid-cols-14 grid-rows-8">{Array.from({ length: GRID_WIDTH * GRID_HEIGHT }).map((_, index) => { const x = index % GRID_WIDTH; const y = Math.floor(index / GRID_WIDTH); const cellKey = `${x}:${y}`; const tower = towerMap.get(cellKey); const unit = unitMap.get(cellKey); const isStart = x === 0; const isGoal = x === GRID_WIDTH - 1; const canBuild = !compact && !tower && !unit && !isStart && !isGoal && Boolean(onCellClick); const cell = <div className={`relative flex items-center justify-center border-r border-b border-white/[0.06] transition ${isStart ? "bg-cyan-300/[0.08]" : isGoal ? "bg-rose-300/[0.08]" : route.has(cellKey) ? "bg-emerald-300/[0.035]" : "bg-transparent"} ${canBuild ? "cursor-crosshair hover:bg-cyan-300/15" : ""}`} onClick={() => canBuild && onCellClick?.(x, y)} title={canBuild ? `Place ${selectedTowerType ? TOWER_INFO[selectedTowerType].short : "tower"} at ${x + 1}/${y + 1}` : undefined}>{isStart && !compact && <span className="absolute left-1 top-1 text-[8px] uppercase tracking-widest text-cyan-200/60">in</span>}{isGoal && !compact && <span className="absolute right-1 top-1 text-[8px] uppercase tracking-widest text-rose-200/70">goal</span>}{tower && <div className={`relative flex size-7 items-center justify-center rounded-md border ${tower.type === "close" ? "border-cyan-300/60 bg-cyan-300/20 text-cyan-100" : tower.type === "far" ? "border-violet-300/60 bg-violet-300/20 text-violet-100" : tower.type === "splash" ? "border-orange-300/60 bg-orange-300/20 text-orange-100" : "border-emerald-300/60 bg-emerald-300/20 text-emerald-100"}`}>{tower.type === "close" ? <Target className="size-4" /> : tower.type === "far" ? <Radar className="size-4" /> : tower.type === "splash" ? <Sparkles className="size-4" /> : <Ruler className="size-4" />}<div className="absolute -top-2 left-1/2 h-1 w-8 -translate-x-1/2 overflow-hidden rounded-full bg-black/70"><div className="h-full rounded-full bg-cyan-300 transition-[width] duration-500" style={{ width: `${Math.max(0, Math.min(100, tower.hp))}%` }} /></div>{!compact && <span className="absolute -bottom-3 whitespace-nowrap text-[7px] font-mono text-slate-500">{tower.type === "close" ? "PULSE" : tower.type === "far" ? "RAIL" : tower.type === "splash" ? "ARC" : "SNARE"}{(tower.upgradeLevel ?? 0) > 0 && ` · LV.${tower.upgradeLevel}`}</span>}</div>}{unit && <div className={`relative flex items-center justify-center rounded-full border-2 shadow-lg ${unit.type === "abuse_control" ? "size-8 border-red-400 bg-red-500/30 text-red-100 shadow-red-500/30" : unit.type === "soldier" ? "size-7 border-amber-300 bg-amber-300/20 text-amber-100" : unit.type === "scout" ? "size-6 border-rose-300 bg-rose-300/20 text-rose-100" : unit.type === "brute" ? "size-8 border-red-300 bg-red-300/20 text-red-100" : "size-5 border-lime-300 bg-lime-300/20 text-lime-100"}`}>{unit.type === "abuse_control" ? <AlertTriangle className="size-4" /> : unit.type === "soldier" ? <Footprints className="size-3.5" /> : unit.type === "scout" ? <Zap className="size-3" /> : unit.type === "brute" ? <Castle className="size-4" /> : <Footprints className="size-3" />}<div className="absolute -top-2 left-1/2 h-1 w-8 -translate-x-1/2 overflow-hidden rounded-full bg-black/70"><div className={`h-full rounded-full ${unit.type === "abuse_control" ? "bg-red-400" : "bg-emerald-300"} transition-[width] duration-500`} style={{ width: `${Math.max(0, Math.min(100, (unit.hp / UNIT_MAX_HP[unit.type]) * 100))}%` }} /></div>{unit.type === "abuse_control" && !compact && <span className="absolute left-1/2 top-8 -translate-x-1/2 whitespace-nowrap rounded bg-red-500/80 px-1.5 py-0.5 text-[8px] font-bold text-white">Abuse Control</span>}</div>}</div>; return canBuild ? <button type="button" key={cellKey} className="contents">{cell}</button> : <div key={cellKey} className="contents">{cell}</div>; })}</div>{projectiles.map((projectile) => { const progress = Math.max(0, Math.min(1, projectile.progress)); const x = projectile.x + (projectile.targetX - projectile.x) * progress; const y = projectile.y + (projectile.targetY - projectile.y) * progress; const projectileColor = projectile.towerType === "close" ? "bg-cyan-200 shadow-cyan-300/90" : projectile.towerType === "far" ? "bg-violet-200 shadow-violet-300/90" : projectile.towerType === "splash" ? "bg-orange-200 shadow-orange-300/90" : "bg-emerald-200 shadow-emerald-300/90"; return <motion.div key={projectile.id} aria-label={`${projectile.towerType} projectile`} className={`pointer-events-none absolute z-20 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_10px_3px] transition-[left,top] duration-700 ease-linear ${projectileColor}`} style={{ left: `${((x + 0.5) / GRID_WIDTH) * 100}%`, top: `${((y + 0.5) / GRID_HEIGHT) * 100}%` }}><span className="absolute left-1/2 top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full bg-current opacity-30" /></motion.div>; })}{!compact && <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-emerald-300/15 bg-[#080d19]/80 px-3 py-1 text-[9px] uppercase tracking-[0.18em] text-emerald-200/60">green cells = verified route · click to build a maze</div>}</div>;
+
+  return <div className="relative aspect-[14/8] overflow-hidden rounded-lg border border-white/[0.07] bg-[#060b15]">
+    <div className="absolute inset-0 grid grid-cols-14 grid-rows-8">
+      {Array.from({ length: GRID_WIDTH * GRID_HEIGHT }).map((_, index) => {
+        const x = index % GRID_WIDTH;
+        const y = Math.floor(index / GRID_WIDTH);
+        const cellKey = `${x}:${y}`;
+        const tower = towerMap.get(cellKey);
+        const isStart = x === 0;
+        const isGoal = x === GRID_WIDTH - 1;
+        const canBuild = !compact && !tower && !isStart && !isGoal && Boolean(onCellClick);
+
+        return <button
+          key={cellKey}
+          type="button"
+          disabled={!canBuild && !tower}
+          onClick={() => { if (canBuild) onCellClick?.(x, y); if (tower && onTowerClick) onTowerClick(tower.id); }}
+          className={`relative border-r border-b border-white/[0.04] transition-colors ${isStart ? "bg-cyan-300/[0.05]" : isGoal ? "bg-rose-300/[0.05]" : route.has(cellKey) ? "bg-emerald-300/[0.02]" : ""} ${canBuild ? "cursor-crosshair hover:bg-cyan-300/20" : ""} ${tower && onTowerClick ? "cursor-pointer hover:brightness-125" : ""} ${tower && tower.id === selectedTowerId ? "ring-1 ring-cyan-300/60" : ""}`}
+          title={canBuild ? `Place ${selectedTowerType ? TOWER_INFO[selectedTowerType].short : "tower"} at ${x + 1}/${y + 1}` : tower ? `${TOWER_INFO[tower.type].short}${(tower.upgradeLevel ?? 0) > 0 ? ` LV.${tower.upgradeLevel}` : ""} — click to upgrade` : undefined}
+        >
+          {isStart && !compact && <span className="absolute left-0.5 top-0.5 text-[7px] font-mono text-cyan-200/50">IN</span>}
+          {isGoal && !compact && <span className="absolute right-0.5 top-0.5 text-[7px] font-mono text-rose-200/50">GOAL</span>}
+          {tower && (
+            <div className={`flex size-full items-center justify-center ${tower.type === "close" ? "text-cyan-200/90" : tower.type === "far" ? "text-violet-200/90" : tower.type === "splash" ? "text-orange-200/90" : "text-emerald-200/90"}`}>
+              {React.createElement(TOWER_INFO[tower.type].icon, { className: compact ? "size-3" : "size-4" })}
+              {!compact && (tower.upgradeLevel ?? 0) > 0 && <span className="absolute -bottom-0.5 text-[6px] font-mono text-cyan-300/80">L{tower.upgradeLevel}</span>}
+            </div>
+          )}
+        </button>;
+      })}
+    </div>
+
+    {/* Units with smooth CSS position transitions */}
+    {units.map((unit) => {
+      const pt = unitPoint(unit);
+      const hpPct = Math.max(0, Math.min(100, (unit.hp / (UNIT_MAX_HP[unit.type] || 10)) * 100));
+      const isFlying = !!(unit as any).flying;
+      return (
+        <div key={unit.id} className="absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-all duration-1000 ease-linear pointer-events-none"
+          style={{
+            left: `${((pt.x + 0.5) / GRID_WIDTH) * 100}%`,
+            top: `${((pt.y + 0.5) / GRID_HEIGHT) * 100}%`,
+          }}>
+          <div className={`relative flex items-center justify-center rounded-full border shadow-lg ${unit.type === "abuse_control" ? "size-8 border-red-400 bg-red-500/30 text-red-100" : isFlying ? "size-7 border-sky-400 bg-sky-400/20 text-sky-100" : unit.type === "titan" || unit.type === "doomsday" ? "size-10 border-red-500 bg-red-600/30 text-red-100" : unit.type === "leviathan" || unit.type === "siege_breaker" ? "size-9 border-amber-400 bg-amber-500/25 text-amber-100" : unit.type === "juggernaut" || unit.type === "brute" ? "size-8 border-orange-400 bg-orange-400/25 text-orange-100" : "size-6 border-amber-300 bg-amber-300/20 text-amber-100"}`}>
+            {unit.type === "abuse_control" ? <AlertTriangle className="size-4" /> : <Footprints className="size-3" />}
+            {isFlying && <span className="absolute -top-3 text-[7px] text-sky-300">▲</span>}
+          </div>
+          {/* HP bar */}
+          {!compact && <div className="absolute -top-3 left-1/2 h-0.5 w-6 -translate-x-1/2 overflow-hidden rounded-full bg-black/60">
+            <div className={`h-full rounded-full transition-[width] duration-500 ${unit.type === "abuse_control" ? "bg-red-400" : hpPct > 50 ? "bg-emerald-300" : hpPct > 25 ? "bg-amber-300" : "bg-red-400"}`} style={{ width: `${hpPct}%` }} />
+          </div>}
+          {unit.type === "abuse_control" && !compact && <span className="absolute left-1/2 top-7 -translate-x-1/2 whitespace-nowrap rounded bg-red-500/80 px-1 py-0.5 text-[7px] font-bold text-white">Abuse Control</span>}
+        </div>
+      );
+    })}
+
+    <ProjectileLayer projectiles={projectiles} />
+
+    {!compact && <div className="pointer-events-none absolute bottom-1.5 left-1/2 -translate-x-1/2 rounded-full border border-emerald-300/10 bg-[#060b15]/80 px-2 py-0.5 text-[8px] text-emerald-200/40">click empty cells to build · click towers to upgrade</div>}
+  </div>;
 }
 
-function PlayerSeat({ player, index, isCurrent, isHost }: { player: Player; index: number; isCurrent: boolean; isHost: boolean }) { return <div className={`rounded-2xl border p-4 ${isCurrent ? "border-cyan-300/40 bg-cyan-300/[0.07]" : "border-white/10 bg-white/[0.025]"}`}><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl text-sm font-semibold" style={{ color: player.color, backgroundColor: `${player.color}18` }}>{index + 1}</div><div><div className="flex items-center gap-1.5 text-sm font-semibold text-white">{player.name}{isCurrent && <span className="rounded-full bg-cyan-300/15 px-1.5 py-0.5 text-[9px] text-cyan-200">YOU</span>}{isHost && <Crown className="size-3.5 text-amber-300" />}</div><p className="mt-0.5 text-[10px] text-slate-500">{towersOf(player).length} maze walls · {unitsOf(player).length} units</p></div></div><div className="text-right"><p className="font-mono text-sm text-white">{player.health}</p><p className="text-[9px] uppercase tracking-widest text-slate-600">integrity</p></div></div><div className="mt-3"><StatBar value={player.health} color={isCurrent ? "bg-cyan-300" : "bg-slate-500"} /></div></div>; }
+// ── Tower upgrade modal ──
+function TowerUpgradeModal({ tower, player, onUpgrade, onClose, isBusy }: { tower: NonNullable<Player["towers"]>[number]; player: Player; onUpgrade: (branch: "power" | "control") => void; onClose: () => void; isBusy: boolean }) {
+  const level = tower.upgradeLevel ?? 0;
+  const locked = tower.upgradeBranch;
+  const cost = UPGRADE_COSTS[level] ?? 200;
+  const gold = goldOf(player);
+  const info = TOWER_INFO[tower.type];
 
-function SetupScreen({ name, setName, roomInput, setRoomInput, maxPlayers, setMaxPlayers, onCreate, onJoin, isBusy, error }: { name: string; setName: (value: string) => void; roomInput: string; setRoomInput: (value: string) => void; maxPlayers: number; setMaxPlayers: (value: number) => void; onCreate: () => void; onJoin: () => void; isBusy: boolean; error: string | null }) { return <div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[1.08fr_0.92fr]"><Card className="overflow-hidden border-white/10 bg-[#0f1729]"><CardHeader className="border-b border-white/10 pb-6"><div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-2xl bg-cyan-300/10 text-cyan-200"><Radio className="size-5" /></div><div><CardTitle className="text-xl text-white">Open a battle room</CardTitle><p className="mt-1 text-sm text-slate-500">Create the lane network and share the code with your crew.</p></div></div></CardHeader><CardContent className="space-y-6 pt-6"><label className="block"><span className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Your callsign</span><Input value={name} onChange={(event) => setName(event.target.value)} maxLength={18} placeholder="e.g. Mica" className="h-12 border-white/10 bg-white/[0.04] text-white placeholder:text-slate-700" /></label><div><span className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Crew size</span><div className="grid grid-cols-3 gap-2">{[2, 3, 4].map((count) => <button type="button" key={count} onClick={() => setMaxPlayers(count)} className={`rounded-xl border py-3 text-sm transition ${maxPlayers === count ? "border-cyan-300/50 bg-cyan-300/10 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-500 hover:border-white/20 hover:text-slate-300"}`}><span className="font-mono text-lg">{count}</span><span className="ml-1 text-xs">players</span></button>)}</div></div><Button type="button" onClick={onCreate} disabled={isBusy || !name.trim()} className="h-12 w-full bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200">{isBusy ? "Opening room…" : "Open room"}<ArrowRight className="size-4" /></Button></CardContent></Card><Card className="border-white/10 bg-white/[0.03]"><CardHeader><div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-2xl bg-violet-300/10 text-violet-200"><Users className="size-5" /></div><div><CardTitle className="text-xl text-white">Join a battle</CardTitle><p className="mt-1 text-sm text-slate-500">Enter the room code from the host.</p></div></div></CardHeader><CardContent className="space-y-6"><label className="block"><span className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Your callsign</span><Input value={name} onChange={(event) => setName(event.target.value)} maxLength={18} placeholder="e.g. Sol" className="h-12 border-white/10 bg-white/[0.04] text-white placeholder:text-slate-700" /></label><label className="block"><span className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Room code</span><Input value={roomInput} onChange={(event) => setRoomInput(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5))} onKeyDown={(event) => event.key === "Enter" && onJoin()} placeholder="A7K3P" className="h-12 border-white/10 bg-white/[0.04] font-mono text-lg tracking-[0.3em] text-white placeholder:text-slate-700" /></label><Button type="button" variant="outline" onClick={onJoin} disabled={isBusy || !name.trim() || roomInput.length < 5} className="h-12 w-full border-white/10 bg-white/[0.04] font-semibold text-white hover:bg-white/10">{isBusy ? "Joining room…" : "Join room"}<DoorOpen className="size-4" /></Button>{error && <p className="rounded-xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-sm text-rose-200">{error}</p>}</CardContent></Card><div className="rounded-2xl border border-white/10 bg-[#0c1324]/70 p-5 lg:col-span-2"><div className="flex flex-wrap items-center gap-x-8 gap-y-3 text-xs text-slate-500"><span className="inline-flex items-center gap-2"><Hammer className="size-4 text-cyan-300" /> Free-build your maze</span><span className="inline-flex items-center gap-2"><CircleDollarSign className="size-4 text-amber-300" /> Gold funds towers and units</span><span className="inline-flex items-center gap-2"><AlertTriangle className="size-4 text-red-300" /> Abuse Control checks your route</span></div></div></div>; }
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="w-80 rounded-2xl border border-white/10 bg-[#0f1729] p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            {React.createElement(info.icon, { className: "size-4 text-cyan-200" })}
+            <span className="text-sm font-semibold text-white">{info.short}</span>
+            <span className="font-mono text-[10px] text-cyan-300">LV.{level}</span>
+          </div>
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-white text-lg leading-none">&times;</button>
+        </div>
+        <p className="text-[11px] text-slate-400 mb-1">{info.range}</p>
+        {locked && <p className="text-[10px] text-slate-500 mb-3">Locked to <span className="text-cyan-300">{locked}</span> branch</p>}
+        {level >= 3 ? (
+          <p className="text-[11px] text-amber-200/70">Maximum level reached.</p>
+        ) : (
+          <>
+            <p className="text-[10px] text-slate-500 mb-3">Upgrade cost: <span className="font-mono text-amber-200">{cost}g</span></p>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" disabled={isBusy || gold < cost || (Boolean(locked) && locked !== "power")}
+                onClick={() => onUpgrade("power")}
+                className="rounded-lg border border-orange-300/20 bg-orange-300/[0.06] px-3 py-2.5 text-left text-[11px] text-orange-100 transition hover:border-orange-300/50 disabled:cursor-not-allowed disabled:opacity-30">
+                <span className="block font-semibold text-xs">POWER</span><span className="mt-0.5 block text-[10px] text-orange-100/60">+20% dmg / lv</span>
+              </button>
+              <button type="button" disabled={isBusy || gold < cost || (Boolean(locked) && locked !== "control")}
+                onClick={() => onUpgrade("control")}
+                className="rounded-lg border border-emerald-300/20 bg-emerald-300/[0.06] px-3 py-2.5 text-left text-[11px] text-emerald-100 transition hover:border-emerald-300/50 disabled:cursor-not-allowed disabled:opacity-30">
+                <span className="block font-semibold text-xs">CONTROL</span><span className="mt-0.5 block text-[10px] text-emerald-100/60">+1 range / lv</span>
+              </button>
+            </div>
+          </>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}
 
-function Lobby({ room, currentUserId, onStart, onLeave, isBusy, error }: { room: Game; currentUserId?: string; onStart: () => void; onLeave: () => void; isBusy: boolean; error: string | null }) { const isHost = String(room.players[0]?.userId) === currentUserId; return <Card className="mx-auto w-full max-w-4xl border-white/10 bg-[#0f1729]"><CardHeader className="border-b border-white/10 pb-6"><div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex items-center gap-2 font-mono text-xs tracking-[0.2em] text-emerald-300"><span className="size-2 animate-pulse rounded-full bg-emerald-300" /> NETWORK READY</div><CardTitle className="mt-3 text-3xl text-white">Assemble the defense crew</CardTitle><p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">Everyone receives a lane. Build a route that is clever, not closed.</p></div><div className="rounded-2xl border border-cyan-300/25 bg-cyan-300/[0.08] px-5 py-4 text-center"><p className="text-[10px] uppercase tracking-[0.25em] text-cyan-200/70">room code</p><p className="mt-1 font-mono text-3xl font-semibold tracking-[0.25em] text-cyan-100">{room.roomCode}</p></div></div></CardHeader><CardContent className="space-y-7 pt-7"><div className="grid gap-3 sm:grid-cols-2">{Array.from({ length: room.maxPlayers }).map((_, index) => { const player = room.players[index]; return player ? <PlayerSeat key={String(player.userId)} player={player} index={index} isCurrent={String(player.userId) === currentUserId} isHost={index === 0} /> : <div key={index} className="flex min-h-[105px] items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.015] text-center"><div><Users className="mx-auto size-5 text-slate-700" /><p className="mt-2 text-xs text-slate-600">Station {index + 1} is open</p></div></div>; })}</div><div className="flex flex-col items-stretch gap-3 border-t border-white/10 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500"><span className="font-mono text-slate-300">{room.players.length}/{room.maxPlayers}</span> players connected{!isHost && " · waiting for host"}</p><div className="flex gap-2"><Button type="button" variant="ghost" onClick={onLeave} className="text-slate-500 hover:bg-white/5 hover:text-white">Leave</Button>{isHost && <Button type="button" onClick={onStart} disabled={isBusy || room.players.length < 2} className="bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200">Start battle <ArrowRight className="size-4" /></Button>}</div></div>{error && <p className="rounded-xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-sm text-rose-200">{error}</p>}</CardContent></Card>; }
+function PlayerSeat({ player, index, isCurrent, isHost }: { player: Player; index: number; isCurrent: boolean; isHost: boolean }) {
+  return <div className={`rounded-xl border p-3 ${isCurrent ? "border-cyan-300/30 bg-cyan-300/[0.05]" : "border-white/8 bg-white/[0.015]"}`}>
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        <div className="flex size-7 items-center justify-center rounded-lg text-xs font-semibold" style={{ color: player.color, backgroundColor: `${player.color}18` }}>{index + 1}</div>
+        <div><div className="flex items-center gap-1 text-xs font-semibold text-white">{player.name}{isCurrent && <span className="rounded bg-cyan-300/15 px-1 text-[8px] text-cyan-200">YOU</span>}{isHost && <Crown className="size-3 text-amber-300" />}</div></div>
+      </div>
+      <div className="text-right"><span className="font-mono text-xs text-white">{player.health}</span><span className="text-[8px] text-slate-600">%</span></div>
+    </div>
+    <div className="mt-1.5"><StatBar value={player.health} color={isCurrent ? "bg-cyan-300" : "bg-slate-500"} /></div>
+  </div>;
+}
 
-function TowerCard({ type, selected, onSelect, disabled }: { type: TowerType; selected: boolean; onSelect: () => void; disabled: boolean }) { const info = TOWER_INFO[type]; const Icon = type === "close" ? Target : type === "far" ? Radar : type === "splash" ? Sparkles : Ruler; return <button type="button" onClick={onSelect} disabled={disabled} className={`group rounded-xl border p-3 text-left transition ${disabled ? "cursor-not-allowed border-white/5 bg-white/[0.02] opacity-50" : selected ? "border-cyan-300/60 bg-cyan-300/15 ring-1 ring-cyan-300/20" : "border-white/10 bg-white/[0.035] hover:-translate-y-0.5 hover:border-cyan-300/35"}`}><div className="flex items-start justify-between gap-2"><div className={`flex size-9 items-center justify-center rounded-lg ${type === "close" ? "bg-cyan-300/10 text-cyan-200" : type === "far" ? "bg-violet-300/10 text-violet-200" : type === "splash" ? "bg-orange-300/10 text-orange-200" : "bg-emerald-300/10 text-emerald-200"}` }><Icon className="size-4" /></div><span className="inline-flex items-center gap-1 font-mono text-xs text-amber-200"><Coins className="size-3" />{info.cost}</span></div><p className="mt-3 text-xs font-semibold text-white">{info.short}</p><p className="mt-1 text-[10px] leading-4 text-slate-500">{info.range}</p><p className="mt-2 text-[9px] uppercase tracking-widest text-cyan-200/60">{selected ? "selected · click lane" : "select type"}</p></button>; }
-function UnitCard({ type, onSend, disabled }: { type: Exclude<UnitType, "abuse_control">; onSend: () => void; disabled: boolean }) { const info = UNIT_INFO[type]; const Icon = type === "soldier" ? Footprints : type === "scout" ? Zap : type === "brute" ? Castle : Footprints; return <button type="button" onClick={onSend} disabled={disabled} className={`group rounded-xl border p-3 text-left transition ${disabled ? "cursor-not-allowed border-white/5 bg-white/[0.02] opacity-50" : "border-white/10 bg-white/[0.035] hover:-translate-y-0.5 hover:border-amber-300/35"}`}><div className="flex items-start justify-between gap-2"><div className={`flex size-9 items-center justify-center rounded-lg ${type === "soldier" ? "bg-amber-300/10 text-amber-200" : type === "scout" ? "bg-rose-300/10 text-rose-200" : type === "brute" ? "bg-red-300/10 text-red-200" : "bg-lime-300/10 text-lime-200"}`}><Icon className="size-4" /></div><span className="inline-flex items-center gap-1 font-mono text-xs text-amber-200"><Coins className="size-3" />{info.cost}</span></div><p className="mt-3 text-xs font-semibold text-white">{info.short}</p><p className="mt-1 text-[10px] leading-4 text-slate-500">{info.detail}</p></button>; }
+function SetupScreen({ name, setName, roomInput, setRoomInput, maxPlayers, setMaxPlayers, onCreate, onJoin, onPractice, isBusy, error }: { name: string; setName: (v: string) => void; roomInput: string; setRoomInput: (v: string) => void; maxPlayers: number; setMaxPlayers: (v: number) => void; onCreate: () => void; onJoin: () => void; onPractice: () => void; isBusy: boolean; error: string | null }) {
+  return <div className="mx-auto grid w-full max-w-5xl gap-5 lg:grid-cols-[1fr_1fr]">
+    <Card className="border-white/[0.07] bg-[#0b1120]">
+      <CardHeader className="pb-4"><div className="flex items-center gap-2"><Radio className="size-4 text-cyan-200" /><CardTitle className="text-base text-white">Host</CardTitle></div></CardHeader>
+      <CardContent className="space-y-4">
+        <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={18} placeholder="Name" className="h-10 border-white/10 bg-white/[0.03] text-white placeholder:text-slate-600 text-sm" />
+        <div className="grid grid-cols-3 gap-1.5">{[2, 3, 4].map((n) => <button key={n} type="button" onClick={() => setMaxPlayers(n)} className={`rounded-lg border py-2 text-xs transition ${maxPlayers === n ? "border-cyan-300/40 bg-cyan-300/10 text-cyan-100" : "border-white/8 bg-white/[0.02] text-slate-500 hover:border-white/15"}`}>{n}p</button>)}</div>
+        <Button type="button" onClick={onCreate} disabled={isBusy || !name.trim()} className="h-10 w-full bg-cyan-300 text-xs font-semibold text-slate-950 hover:bg-cyan-200">Create room</Button>
+      </CardContent>
+    </Card>
+    <Card className="border-white/[0.07] bg-white/[0.015]">
+      <CardHeader className="pb-4"><div className="flex items-center gap-2"><Users className="size-4 text-violet-200" /><CardTitle className="text-base text-white">Join</CardTitle></div></CardHeader>
+      <CardContent className="space-y-4">
+        <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={18} placeholder="Name" className="h-10 border-white/10 bg-white/[0.03] text-white placeholder:text-slate-600 text-sm" />
+        <Input value={roomInput} onChange={(e) => setRoomInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5))} onKeyDown={(e) => e.key === "Enter" && onJoin()} placeholder="CODE" className="h-10 border-white/10 bg-white/[0.03] font-mono text-lg tracking-[0.2em] text-white placeholder:text-slate-600" />
+        <Button type="button" variant="outline" onClick={onJoin} disabled={isBusy || !name.trim() || roomInput.length < 5} className="h-10 w-full border-white/10 bg-white/[0.03] text-xs font-semibold text-white hover:bg-white/8">Join room</Button>
+        <div className="border-t border-white/5 pt-3"><Button type="button" variant="ghost" onClick={onPractice} disabled={isBusy || !name.trim()} className="h-10 w-full text-xs text-slate-400 hover:text-cyan-200 hover:bg-cyan-300/5">Practice solo</Button></div>
+        {error && <p className="rounded-lg border border-rose-300/15 bg-rose-300/[0.06] px-3 py-2 text-[11px] text-rose-200">{error}</p>}
+      </CardContent>
+    </Card>
+  </div>;
+}
 
-function TowerUpgradeCard({ tower, onUpgrade, disabled }: { tower: NonNullable<Player["towers"]>[number]; onUpgrade: (branch: "power" | "control") => void; disabled: boolean }) { const level = tower.upgradeLevel ?? 0; const cost = 20 + level * 15; const locked = tower.upgradeBranch; return <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><div className="flex items-center justify-between gap-2"><div><p className="text-xs font-semibold text-white">{TOWER_INFO[tower.type].short} <span className="font-mono text-cyan-200">LV.{level}</span></p><p className="mt-1 text-[10px] text-slate-500">{locked ? `${locked} branch · next upgrade ${cost}g` : `choose a branch · ${cost}g`}</p></div><span className="font-mono text-[10px] text-slate-600">{tower.x !== undefined ? `${tower.x + 1},${(tower.y ?? 0) + 1}` : "legacy"}</span></div><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" disabled={disabled || level >= 3 || (Boolean(locked) && locked !== "power")} onClick={() => onUpgrade("power")} className="rounded-lg border border-orange-300/20 bg-orange-300/[0.06] px-2 py-2 text-left text-[10px] text-orange-100 transition hover:border-orange-300/50 disabled:cursor-not-allowed disabled:opacity-40"><span className="block font-semibold">POWER</span><span className="mt-1 block text-orange-100/60">+damage</span></button><button type="button" disabled={disabled || level >= 3 || (Boolean(locked) && locked !== "control")} onClick={() => onUpgrade("control")} className="rounded-lg border border-emerald-300/20 bg-emerald-300/[0.06] px-2 py-2 text-left text-[10px] text-emerald-100 transition hover:border-emerald-300/50 disabled:cursor-not-allowed disabled:opacity-40"><span className="block font-semibold">CONTROL</span><span className="mt-1 block text-emerald-100/60">+range / effect</span></button></div></div>; }
+function Lobby({ room, currentUserId, onStart, onLeave, isBusy, error }: { room: Game; currentUserId?: string; onStart: () => void; onLeave: () => void; isBusy: boolean; error: string | null }) {
+  const isHost = String(room.players[0]?.userId) === currentUserId;
+  const isPractice = !!(room as any).isPractice;
+  return <Card className="mx-auto w-full max-w-3xl border-white/[0.07] bg-[#0b1120]">
+    <CardHeader className="border-b border-white/5 pb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2 font-mono text-[10px] tracking-[0.15em] text-emerald-300"><span className="size-1.5 rounded-full bg-emerald-300 animate-pulse" />{isPractice ? "PRACTICE" : "LOBBY"}</div>
+          <CardTitle className="mt-1 text-xl text-white">{isPractice ? "Training Ground" : "Assemble crew"}</CardTitle>
+        </div>
+        <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.05] px-4 py-3 text-center">
+          <p className="text-[9px] uppercase tracking-[0.2em] text-cyan-200/60">code</p>
+          <p className="mt-0.5 font-mono text-2xl font-semibold tracking-[0.2em] text-cyan-100">{room.roomCode}</p>
+        </div>
+      </div>
+    </CardHeader>
+    <CardContent className="space-y-4 pt-4">
+      <div className="grid gap-2 sm:grid-cols-2">
+        {Array.from({ length: room.maxPlayers }).map((_, i) => {
+          const p = room.players[i];
+          return p ? <PlayerSeat key={String(p.userId)} player={p} index={i} isCurrent={String(p.userId) === currentUserId} isHost={i === 0} />
+            : <div key={i} className="flex min-h-[70px] items-center justify-center rounded-xl border border-dashed border-white/5 bg-white/[0.01]"><p className="text-[10px] text-slate-600">Open slot {i + 1}</p></div>;
+        })}
+      </div>
+      <div className="flex items-center justify-between border-t border-white/5 pt-3">
+        <span className="text-[10px] text-slate-500">{room.players.length}/{room.maxPlayers} connected</span>
+        <div className="flex gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onLeave} className="text-[10px] text-slate-500 hover:text-white">Leave</Button>
+          {(isHost || isPractice) && <Button type="button" size="sm" onClick={onStart} disabled={isBusy} className="bg-cyan-300 text-[10px] font-semibold text-slate-950 hover:bg-cyan-200">{isPractice ? "Start" : "Start battle"}</Button>}
+        </div>
+      </div>
+      {error && <p className="rounded-lg border border-rose-300/15 bg-rose-300/[0.06] px-3 py-2 text-[11px] text-rose-200">{error}</p>}
+    </CardContent>
+  </Card>;
+}
 
-function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, onLeave, isBusy, error }: { room: Game; currentUserId?: string; onBuild: (type: TowerType, x: number, y: number) => void; onSend: (type: Exclude<UnitType, "abuse_control">) => void; onUpgrade: (towerId: string, branch: "power" | "control") => void; onCopy: () => void; onLeave: () => void; isBusy: boolean; error: string | null }) {
-  const currentIndex = room.players.findIndex((player) => String(player.userId) === currentUserId);
+function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, onLeave, isBusy, error }: { room: Game; currentUserId?: string; onBuild: (type: TowerType, x: number, y: number) => void; onSend: (type: string) => void; onUpgrade: (towerId: string, branch: "power" | "control") => void; onCopy: () => void; onLeave: () => void; isBusy: boolean; error: string | null }) {
+  const currentIndex = room.players.findIndex((p) => String(p.userId) === currentUserId);
   const player = room.players[currentIndex];
   const nextPlayer = room.players[(currentIndex + 1) % room.players.length];
   const [selectedTowerType, setSelectedTowerType] = useState<TowerType>("close");
+  const [selectedTowerId, setSelectedTowerId] = useState<string | null>(null);
+  const [unitTab, setUnitTab] = useState<"budget" | "mid" | "endgame">("budget");
+
   if (!player) return null;
   const gold = goldOf(player);
-  return <div className="mx-auto w-full max-w-7xl space-y-5"><div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#0f1729]/90 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-4"><div className="flex size-10 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-200"><Crosshair className="size-5" /></div><div><div className="flex items-center gap-2"><h1 className="font-mono text-sm font-semibold tracking-[0.18em] text-white">LAN TOWER WARS</h1><span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[10px] text-emerald-200">LIVE</span></div><p className="mt-1 text-xs text-slate-500">Wave {room.wave} · 14 × 8 build grid · next target: {nextPlayer?.name}</p></div></div><div className="flex items-center gap-2"><EconomyPill player={player} /><button type="button" onClick={onCopy} className="hidden rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 font-mono text-xs tracking-[0.15em] text-slate-400 hover:border-cyan-300/30 sm:block">{room.roomCode}</button><Button type="button" variant="ghost" size="icon" onClick={onLeave} className="text-slate-500 hover:bg-rose-300/10 hover:text-rose-200"><LogOut className="size-4" /></Button></div></div><div className="grid gap-5 xl:grid-cols-[0.9fr_1.5fr_0.9fr]"><Card className="border-cyan-300/25 bg-cyan-300/[0.045]"><CardHeader className="pb-4"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] tracking-[0.2em] text-cyan-200/60">MAZE CONSOLE</p><CardTitle className="mt-2 text-xl text-white">Place your walls</CardTitle></div><Hammer className="size-5 text-cyan-200" /></div></CardHeader><CardContent className="space-y-5"><div className="grid grid-cols-2 gap-3"><div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.08] p-3"><p className="text-[10px] uppercase tracking-widest text-amber-200/60">available</p><p className="mt-1 flex items-center gap-1.5 font-mono text-2xl text-amber-100"><Coins className="size-5" />{gold}</p></div><div className="rounded-xl border border-emerald-300/15 bg-emerald-300/[0.06] p-3"><p className="text-[10px] uppercase tracking-widest text-emerald-200/60">income</p><p className="mt-1 font-mono text-2xl text-emerald-200">+{incomeOf(player)}<span className="text-xs">/s</span></p></div></div><div><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">1. Select a tower</p><div className="grid grid-cols-2 gap-2"><TowerCard type="close" selected={selectedTowerType === "close"} onSelect={() => setSelectedTowerType("close")} disabled={gold < TOWER_INFO.close.cost || isBusy} /><TowerCard type="far" selected={selectedTowerType === "far"} onSelect={() => setSelectedTowerType("far")} disabled={gold < TOWER_INFO.far.cost || isBusy} /><TowerCard type="splash" selected={selectedTowerType === "splash"} onSelect={() => setSelectedTowerType("splash")} disabled={gold < TOWER_INFO.splash.cost || isBusy} /><TowerCard type="slow" selected={selectedTowerType === "slow"} onSelect={() => setSelectedTowerType("slow")} disabled={gold < TOWER_INFO.slow.cost || isBusy} /></div></div><div className="border-t border-white/10 pt-4"><p className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">2. Click a lane cell</p><p className="mt-2 text-xs leading-5 text-slate-400">Towers are solid walls. The server rejects any build that fully seals the route, so shape a maze instead of a box.</p></div><div className="border-t border-white/10 pt-4"><div className="mb-2 flex items-center justify-between"><p className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">Upgrade bay</p><span className="font-mono text-[9px] text-slate-600">2 BRANCHES · 3 LEVELS</span></div><div className="space-y-2">{towersOf(player).length === 0 ? <p className="rounded-xl border border-dashed border-white/10 px-3 py-3 text-[11px] text-slate-600">Build a tower to unlock its power and control paths.</p> : towersOf(player).map((tower) => <TowerUpgradeCard key={tower.id} tower={tower} onUpgrade={(branch) => onUpgrade(tower.id, branch)} disabled={isBusy || gold < 20 + (tower.upgradeLevel ?? 0) * 15} />)}</div></div><div className="rounded-xl border border-red-300/20 bg-red-500/[0.06] p-3 text-[11px] leading-5 text-red-100/75"><div className="flex items-center gap-2 font-semibold text-red-200"><AlertTriangle className="size-4" /> Abuse Control protocol</div><p className="mt-1">Every 10 seconds, a red probe checks whether the current path still reaches the goal.</p></div><div className="border-t border-white/10 pt-4"><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">Deploy to {nextPlayer?.name}</p><div className="grid grid-cols-2 gap-2"><UnitCard type="soldier" onSend={() => onSend("soldier")} disabled={isBusy || gold < UNIT_INFO.soldier.cost} /><UnitCard type="scout" onSend={() => onSend("scout")} disabled={isBusy || gold < UNIT_INFO.scout.cost} /><UnitCard type="brute" onSend={() => onSend("brute")} disabled={isBusy || gold < UNIT_INFO.brute.cost} /><UnitCard type="runner" onSend={() => onSend("runner")} disabled={isBusy || gold < UNIT_INFO.runner.cost} /></div></div><div className="flex items-start gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.05] p-3 text-[11px] leading-5 text-amber-100/70"><CircleDollarSign className="mt-0.5 size-4 shrink-0 text-amber-300" />Foot soldiers cost 5 gold and permanently add 1 gold per second.</div></CardContent></Card><Card className="border-white/10 bg-[#0f1729]"><CardHeader className="border-b border-white/10 pb-5"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] tracking-[0.2em] text-slate-600">FREE-BUILD BATTLEFIELD</p><CardTitle className="mt-2 text-xl text-white">{player.name}'s maze</CardTitle></div><div className="flex items-center gap-2 rounded-full border border-red-300/25 bg-red-500/10 px-3 py-1.5 text-xs text-red-200"><AlertTriangle className="size-3.5" /> Abuse Control / 10s</div></div></CardHeader><CardContent className="space-y-4 pt-5"><GridLane player={player} selectedTowerType={selectedTowerType} onCellClick={(x, y) => onBuild(selectedTowerType, x, y)} /><div className="grid grid-cols-3 gap-2 text-center"><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="font-mono text-xl text-white">{player.health}</p><p className="text-[9px] uppercase tracking-widest text-slate-600">integrity</p></div><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="font-mono text-xl text-cyan-100">{towersOf(player).length}</p><p className="text-[9px] uppercase tracking-widest text-slate-600">walls</p></div><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="font-mono text-xl text-amber-100">{unitsOf(player).length}</p><p className="text-[9px] uppercase tracking-widest text-slate-600">incoming</p></div></div><div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2.5 text-[10px] text-slate-500"><span className="inline-flex items-center gap-2"><Ruler className="size-3.5 text-cyan-300" />Solid towers block movement</span><span className="font-mono text-slate-600">IN <ChevronRight className="inline size-3" /> GOAL</span></div></CardContent></Card><Card className="border-white/10 bg-white/[0.03]"><CardHeader className="pb-4"><div className="flex items-center gap-2"><Radar className="size-4 text-violet-200" /><div><p className="font-mono text-[10px] tracking-[0.2em] text-slate-600">LAN TELEMETRY</p><CardTitle className="mt-1 text-lg text-white">All mazes</CardTitle></div></div></CardHeader><CardContent className="space-y-4">{room.players.map((seat, index) => <div key={String(seat.userId)}><div className="mb-2 flex items-center justify-between text-[11px]"><span className={index === currentIndex ? "font-semibold text-cyan-100" : "text-slate-400"}>{seat.name}{index === currentIndex && " · YOU"}</span><span className="font-mono text-slate-600">{seat.health}%</span></div><GridLane player={seat} compact /></div>)}<div className="flex items-center gap-2 border-t border-white/10 pt-4 text-[10px] leading-4 text-slate-600"><Wifi className="size-3.5 text-emerald-300" /> Route state synced across the LAN</div></CardContent></Card></div><div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-[#0f1729]/80 px-5 py-4"><div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-slate-400"><Radio className="size-4" /></div><div><p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-600">battle log</p><p className="mt-1 text-sm text-slate-300">{room.lastAction}</p></div></div>{error && <p className="rounded-xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-sm text-rose-200">{error}</p>}<div className="flex flex-wrap items-center justify-between gap-3 px-1 text-[10px] uppercase tracking-[0.18em] text-slate-700"><span>Build a route · send units · survive the audit</span><span className="inline-flex items-center gap-1.5"><Castle className="size-3" /> Maze defense / V1</span></div></div>;
+  const myTowers = towersOf(player);
+  const selectedTower = selectedTowerId ? myTowers.find((t) => t.id === selectedTowerId) : null;
+
+  const tabUnits = Object.entries(UNIT_INFO).filter(([, info]) => info.tier === unitTab);
+
+  return <div className="mx-auto w-full max-w-7xl space-y-4">
+    {/* Top bar */}
+    <div className="flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-[#0b1120]/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-3">
+        <Crosshair className="size-4 text-cyan-200" />
+        <div>
+          <span className="font-mono text-[11px] font-semibold tracking-[0.15em] text-white">LAN TOWER WARS</span>
+          <span className="ml-2 rounded border border-emerald-300/15 bg-emerald-300/[0.06] px-1.5 py-0.5 text-[9px] text-emerald-200">{room.isPractice ? "PRACTICE" : "LIVE"}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <EconomyPill player={player} compact />
+        <button type="button" onClick={onCopy} className="hidden rounded border border-white/8 bg-white/[0.02] px-2 py-1 font-mono text-[10px] tracking-[0.1em] text-slate-400 hover:border-cyan-300/30 sm:block">{room.roomCode}</button>
+        <Button type="button" variant="ghost" size="icon" onClick={onLeave} className="size-7 text-slate-500 hover:text-rose-200"><LogOut className="size-3.5" /></Button>
+      </div>
+    </div>
+
+    {/* Three-column layout */}
+    <div className="grid gap-4 xl:grid-cols-[0.85fr_1.6fr_0.85fr]">
+      {/* Left: build + units */}
+      <Card className="border-white/[0.07] bg-[#0b1120]">
+        <CardHeader className="pb-3"><div className="flex items-center gap-2"><Hammer className="size-3.5 text-cyan-200" /><CardTitle className="text-sm text-white">Build</CardTitle></div></CardHeader>
+        <CardContent className="space-y-4">
+          {/* Tower grid */}
+          <div className="grid grid-cols-2 gap-1.5">
+            {(Object.entries(TOWER_INFO) as [TowerType, typeof TOWER_INFO[TowerType]][]).map(([type, info]) => {
+              const Icon = info.icon;
+              return <button key={type} type="button" onClick={() => setSelectedTowerType(type)}
+                disabled={gold < info.cost || isBusy}
+                className={`rounded-lg border p-2 text-left transition ${selectedTowerType === type ? "border-cyan-300/50 bg-cyan-300/10 ring-1 ring-cyan-300/15" : "border-white/6 bg-white/[0.02] hover:border-white/15"} ${gold < info.cost ? "opacity-30 cursor-not-allowed" : ""}`}>
+                <div className="flex items-center justify-between"><Icon className="size-3.5 text-cyan-200" /><span className="font-mono text-[10px] text-amber-200">{info.cost}g</span></div>
+                <p className="mt-1 text-[10px] font-medium text-white">{info.short}</p>
+                <p className="text-[8px] text-slate-500">{info.range}</p>
+              </button>;
+            })}
+          </div>
+
+          {/* Unit shop with tabs */}
+          <div className="border-t border-white/5 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[9px] uppercase tracking-wider text-slate-500">Send to {nextPlayer?.name}</span>
+            </div>
+            <div className="flex gap-1 mb-2">
+              {(["budget", "mid", "endgame"] as const).map((tab) => (
+                <button key={tab} type="button" onClick={() => setUnitTab(tab)}
+                  className={`flex-1 rounded-md py-1 text-[9px] font-medium uppercase tracking-wider transition ${unitTab === tab ? "bg-cyan-300/15 text-cyan-200" : "text-slate-600 hover:text-slate-400"}`}>
+                  {tab === "budget" ? "≤800g" : tab === "mid" ? "≤3K" : "≤50K"}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 max-h-[260px] overflow-y-auto">
+              {tabUnits.map(([type, info]) => {
+                const Icon = info.icon;
+                return <button key={type} type="button" onClick={() => onSend(type)}
+                  disabled={gold < info.cost || isBusy}
+                  className={`rounded-lg border p-2 text-left transition ${gold < info.cost ? "border-white/3 bg-white/[0.01] opacity-30 cursor-not-allowed" : "border-white/6 bg-white/[0.02] hover:border-amber-300/30 hover:-translate-y-0.5"}`}>
+                  <div className="flex items-center justify-between">
+                    <Icon className="size-3 text-amber-200" />
+                    <span className="font-mono text-[9px] text-amber-200">{info.cost.toLocaleString()}g</span>
+                  </div>
+                  <p className="mt-0.5 text-[10px] font-medium text-white leading-tight">{info.short}</p>
+                  <p className="text-[8px] text-slate-500">
+                    {info.hp}hp · +{info.income}inc
+                    {info.flying && " · fly"}
+                    {info.resistance && ` · ${info.resistance} res`}
+                  </p>
+                </button>;
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-start gap-1.5 rounded-lg border border-amber-300/10 bg-amber-300/[0.03] p-2 text-[9px] text-amber-100/60">
+            <Coins className="mt-0.5 size-3 shrink-0 text-amber-300" />Sending units permanently increases your income.
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Center: battlefield */}
+      <Card className="border-white/[0.07] bg-[#0b1120]">
+        <CardHeader className="flex flex-row items-center justify-between border-b border-white/5 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[9px] text-slate-600">BATTLEFIELD</span>
+            <CardTitle className="text-sm text-white">{player.name}</CardTitle>
+          </div>
+          <div className="flex items-center gap-1.5 rounded border border-red-300/15 bg-red-500/[0.06] px-2 py-0.5 text-[9px] text-red-200"><AlertTriangle className="size-3" />10s</div>
+        </CardHeader>
+        <CardContent className="pt-3 space-y-3">
+          <GridLane player={player} selectedTowerType={selectedTowerType} onCellClick={(x, y) => onBuild(selectedTowerType, x, y)} onTowerClick={(id) => setSelectedTowerId(id === selectedTowerId ? null : id)} selectedTowerId={selectedTowerId} />
+          <div className="grid grid-cols-3 gap-1.5 text-center">
+            <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-white">{player.health}</p><p className="text-[8px] text-slate-600">integrity</p></div>
+            <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-cyan-100">{myTowers.length}</p><p className="text-[8px] text-slate-600">walls</p></div>
+            <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-amber-100">{unitsOf(player).length}</p><p className="text-[8px] text-slate-600">units</p></div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Right: other lanes + log */}
+      <Card className="border-white/[0.07] bg-white/[0.01]">
+        <CardHeader className="pb-3"><div className="flex items-center gap-2"><Radar className="size-3.5 text-violet-200" /><CardTitle className="text-sm text-white">All lanes</CardTitle></div></CardHeader>
+        <CardContent className="space-y-3">
+          {room.players.map((seat, i) => (
+            <div key={String(seat.userId)}>
+              <div className="mb-1 flex items-center justify-between text-[9px]">
+                <span className={i === currentIndex ? "font-semibold text-cyan-100" : "text-slate-400"}>{seat.name}</span>
+                <span className="font-mono text-slate-600">{seat.health}%</span>
+              </div>
+              <GridLane player={seat} compact />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* Battle log */}
+    <div className="flex items-start gap-2 rounded-xl border border-white/5 bg-[#0b1120]/80 px-4 py-3">
+      <Radio className="mt-0.5 size-3.5 shrink-0 text-slate-500" />
+      <p className="text-[10px] text-slate-400">{room.lastAction}</p>
+    </div>
+    {error && <p className="rounded-lg border border-rose-300/15 bg-rose-300/[0.06] px-3 py-2 text-[11px] text-rose-200">{error}</p>}
+
+    {/* Tower upgrade modal */}
+    <AnimatePresence>
+      {selectedTower && <TowerUpgradeModal tower={selectedTower} player={player} onUpgrade={(branch) => { onUpgrade(selectedTower.id, branch); setSelectedTowerId(null); }} onClose={() => setSelectedTowerId(null)} isBusy={isBusy} />}
+    </AnimatePresence>
+  </div>;
 }
 
 export default function Dashboard() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { signIn } = useAuthActions();
   const navigate = useNavigate();
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [name, setName] = useState(() => user?.name ?? "");
@@ -113,6 +479,7 @@ export default function Dashboard() {
   const [isBusy, setIsBusy] = useState(false);
   const room = useQuery(api.game.getRoom, roomCode ? { roomCode } : "skip");
   const createRoom = useMutation(api.game.createRoom);
+  const createPracticeRoom = useMutation(api.game.createPracticeRoom);
   const joinRoom = useMutation(api.game.joinRoom);
   const leaveRoom = useMutation(api.game.leaveRoom);
   const startGame = useMutation(api.game.startGame);
@@ -124,12 +491,108 @@ export default function Dashboard() {
   const isLoadingRoom = Boolean(roomCode && room === undefined);
   const showSetup = !roomCode || room === null;
   const roomStatus = room?.status ?? "lobby";
-  useEffect(() => { if (!roomCode || roomStatus !== "playing") return; const timer = window.setInterval(() => { void tick({ roomCode }).catch(() => undefined); }, 1000); return () => window.clearInterval(timer); }, [roomCode, roomStatus, tick]);
-  const run = async (action: () => Promise<unknown>) => { setIsBusy(true); setError(null); try { await action(); } catch (actionError) { const message = friendlyError(actionError); setError(message); toast.error(message); } finally { setIsBusy(false); } };
-  const handleCreate = () => run(async () => { const createdCode = await createRoom({ name: name.trim(), maxPlayers }); setRoomCode(createdCode); toast.success(`Room ${createdCode} is ready.`); });
-  const handleJoin = () => run(async () => { const joinedCode = await joinRoom({ roomCode: roomInput, name: name.trim() }); setRoomCode(joinedCode); toast.success("You joined the battle."); });
-  const handleLeave = () => run(async () => { if (roomCode) await leaveRoom({ roomCode }); setRoomCode(null); setRoomInput(""); });
-  const handleCopy = async () => { if (!room) return; try { await navigator.clipboard.writeText(room.roomCode); toast.success("Room code copied."); } catch { toast.info(`Share code: ${room.roomCode}`); } };
+
+  // Auto anonymous sign-in
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      signIn("anonymous").catch(() => {});
+    }
+  }, [authLoading, isAuthenticated, signIn]);
+
+  useEffect(() => {
+    if (!roomCode || roomStatus !== "playing") return;
+    const timer = window.setInterval(() => { void tick({ roomCode }).catch(() => undefined); }, 1000);
+    return () => window.clearInterval(timer);
+  }, [roomCode, roomStatus, tick]);
+
+  const run = async (action: () => Promise<unknown>) => {
+    setIsBusy(true); setError(null);
+    try { await action(); } catch (e) { const msg = friendlyError(e); setError(msg); toast.error(msg); }
+    finally { setIsBusy(false); }
+  };
+
+  const handleCreate = () => run(async () => {
+    const code = await createRoom({ name: name.trim(), maxPlayers });
+    setRoomCode(code); toast.success(`Room ${code}`);
+  });
+
+  const handlePractice = () => run(async () => {
+    const code = await createPracticeRoom({ name: name.trim() });
+    setRoomCode(code); toast.success("Practice mode");
+  });
+
+  const handleJoin = () => run(async () => {
+    const code = await joinRoom({ roomCode: roomInput, name: name.trim() });
+    setRoomCode(code); toast.success("Joined");
+  });
+
+  const handleLeave = () => run(async () => {
+    if (roomCode) await leaveRoom({ roomCode });
+    setRoomCode(null); setRoomInput("");
+  });
+
+  const handleCopy = async () => {
+    if (!room) return;
+    try { await navigator.clipboard.writeText(room.roomCode); toast.success("Copied"); }
+    catch { toast.info(`Code: ${room.roomCode}`); }
+  };
+
   const handleSignOut = async () => { await signOut(); navigate("/"); };
-  return <main className="min-h-screen overflow-hidden bg-[#080b14] text-slate-100"><div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_85%_0%,rgba(34,211,238,0.08),transparent_30%),linear-gradient(180deg,#080b14_0%,#0b1120_60%,#080b14_100%)]" /><div className="relative mx-auto flex min-h-screen w-full max-w-[1500px] flex-col px-5 pb-8 sm:px-8"><header className="flex items-center justify-between py-5"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-300/10 text-cyan-200"><Crosshair className="size-4" /></div><div><p className="font-mono text-xs font-semibold tracking-[0.25em] text-cyan-100">LAN TOWER WARS</p><p className="text-[10px] text-slate-600">free-build lane control</p></div></div><div className="flex items-center gap-3"><div className="hidden items-center gap-2 text-xs text-slate-600 sm:flex"><span className="size-1.5 rounded-full bg-emerald-300" /> {user?.name ?? "Player"}</div><Button type="button" variant="ghost" size="sm" onClick={handleSignOut} className="text-slate-500 hover:bg-white/5 hover:text-white"><LogOut className="size-4" /> Sign out</Button></div></header><div className="flex flex-1 flex-col justify-center py-8 sm:py-12">{isLoadingRoom ? <div className="flex items-center justify-center gap-3 text-sm text-slate-500"><Sparkles className="size-4 animate-pulse text-cyan-200" /> Syncing room…</div> : showSetup ? <><div className="mx-auto mb-10 max-w-2xl text-center"><div className="mb-4 inline-flex items-center gap-2 rounded-full border border-red-300/20 bg-red-500/[0.08] px-3 py-1.5 font-mono text-[10px] tracking-[0.2em] text-red-200"><AlertTriangle className="size-3.5" /> V1 · MAZE DEFENSE PROTOCOL</div><h1 className="text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">Build a path. Pass the audit.</h1><p className="mx-auto mt-4 max-w-xl text-base leading-7 text-slate-500">Place towers cell by cell to shape a maze, not a sealed box. Every ten seconds, the red Abuse Control probe checks that units can still reach the goal.</p></div><SetupScreen name={name} setName={setName} roomInput={roomInput} setRoomInput={setRoomInput} maxPlayers={maxPlayers} setMaxPlayers={setMaxPlayers} onCreate={handleCreate} onJoin={handleJoin} isBusy={isBusy} error={error} /></> : roomStatus === "lobby" ? <Lobby room={room!} currentUserId={currentUserId} onStart={() => run(() => startGame({ roomCode: roomCode! }))} onLeave={handleLeave} isBusy={isBusy} error={error} /> : roomStatus === "playing" ? <GameBoard room={room!} currentUserId={currentUserId} onBuild={(towerType, x, y) => run(() => buildTower({ roomCode: roomCode!, towerType, x, y }))} onSend={(unitType) => run(() => sendUnit({ roomCode: roomCode!, unitType }))} onUpgrade={(towerId, branch) => run(() => upgradeTower({ roomCode: roomCode!, towerId, branch }))} onCopy={handleCopy} onLeave={handleLeave} isBusy={isBusy} error={error} /> : <Card className="mx-auto max-w-xl border-rose-300/20 bg-rose-300/[0.06] text-center"><CardContent className="space-y-5 pt-8"><div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-rose-300/10 text-rose-200"><Swords className="size-7" /></div><h2 className="text-2xl font-semibold text-white">The maze has fallen.</h2><p className="text-sm leading-6 text-slate-500">A lane breach reached zero integrity during wave {room?.wave}. Open a fresh room and build a smarter route.</p><Button type="button" onClick={handleLeave} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">Back to matches</Button></CardContent></Card>}</div><footer className="flex items-center justify-between border-t border-white/5 pt-5 text-[10px] uppercase tracking-[0.18em] text-slate-700"><span>V1 · 2–4 PLAYERS</span><span>Maze-first physical lanes</span></footer></div></main>;
+
+  // Show loading while auth is resolving
+  if (authLoading) {
+    return <main className="flex min-h-screen items-center justify-center bg-[#080b14]"><Sparkles className="size-5 animate-pulse text-cyan-200" /></main>;
+  }
+
+  return <main className="min-h-screen bg-[#080b14] text-slate-100">
+    <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_85%_0%,rgba(34,211,238,0.05),transparent_30%),linear-gradient(180deg,#080b14_0%,#0a0f1e_60%,#080b14_100%)]" />
+    <div className="relative mx-auto flex min-h-screen w-full max-w-[1500px] flex-col px-4 pb-6 sm:px-6">
+      <header className="flex items-center justify-between py-4">
+        <div className="flex items-center gap-2">
+          <Crosshair className="size-4 text-cyan-200" />
+          <span className="font-mono text-[11px] font-semibold tracking-[0.2em] text-cyan-100">LAN TOWER WARS</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {user?.name && <span className="hidden text-[10px] text-slate-600 sm:inline">{user.name}</span>}
+          {isAuthenticated && <Button type="button" variant="ghost" size="sm" onClick={handleSignOut} className="text-[10px] text-slate-500 hover:text-white"><LogOut className="size-3" /></Button>}
+        </div>
+      </header>
+
+      <div className="flex flex-1 flex-col justify-center py-6 sm:py-8">
+        {isLoadingRoom ? (
+          <div className="flex items-center justify-center gap-2 text-xs text-slate-500"><Sparkles className="size-3 animate-pulse text-cyan-200" />Syncing…</div>
+        ) : showSetup ? (
+          <>
+            <div className="mx-auto mb-8 max-w-xl text-center">
+              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Build a maze. Pass the audit.</h1>
+              <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-500">Place towers on the grid to shape a route. Every 10s, Abuse Control checks the path still works. Send units to your neighbors — their gold becomes your income.</p>
+            </div>
+            <SetupScreen name={name} setName={setName} roomInput={roomInput} setRoomInput={setRoomInput} maxPlayers={maxPlayers} setMaxPlayers={setMaxPlayers} onCreate={handleCreate} onJoin={handleJoin} onPractice={handlePractice} isBusy={isBusy} error={error} />
+          </>
+        ) : roomStatus === "lobby" ? (
+          <Lobby room={room!} currentUserId={currentUserId} onStart={() => run(() => startGame({ roomCode: roomCode! }))} onLeave={handleLeave} isBusy={isBusy} error={error} />
+        ) : roomStatus === "playing" ? (
+          <GameBoard room={room!} currentUserId={currentUserId}
+            onBuild={(t, x, y) => run(() => buildTower({ roomCode: roomCode!, towerType: t, x, y }))}
+            onSend={(unitType) => run(() => sendUnit({ roomCode: roomCode!, unitType: unitType as any }))}
+            onUpgrade={(towerId, branch) => run(() => upgradeTower({ roomCode: roomCode!, towerId, branch }))}
+            onCopy={handleCopy} onLeave={handleLeave} isBusy={isBusy} error={error} />
+        ) : (
+          <Card className="mx-auto max-w-md border-rose-300/15 bg-rose-300/[0.04] text-center">
+            <CardContent className="space-y-4 pt-6">
+              <Swords className="mx-auto size-8 text-rose-200" />
+              <h2 className="text-lg font-semibold text-white">Game Over</h2>
+              <p className="text-xs text-slate-500">Wave {room?.wave} — a lane reached zero integrity.</p>
+              <Button type="button" size="sm" onClick={handleLeave} className="bg-cyan-300 text-xs text-slate-950 hover:bg-cyan-200">New match</Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <footer className="flex items-center justify-between border-t border-white/[0.03] pt-3 text-[8px] uppercase tracking-[0.15em] text-slate-700">
+        <span>V1 · 2–4P</span>
+        <span>maze-first defense</span>
+      </footer>
+    </div>
+  </main>;
 }
