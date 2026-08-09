@@ -16,20 +16,20 @@ const steps = [
   {
     number: "01",
     icon: Radio,
-    title: "Open a room",
-    text: "One friend starts a room and shares the five-letter code over the LAN.",
+    title: "Host the match",
+    text: "One player starts a match and shares the five-character code with friends on the LAN.",
   },
   {
     number: "02",
     icon: Zap,
-    title: "Pass the pressure",
-    text: "Send 1–5 units clockwise to your neighbor. Every player has a gate to protect.",
+    title: "Send the assault",
+    text: "Send 1–5 units to the player next to you. Every player has a tower to defend.",
   },
   {
     number: "03",
     icon: Shield,
-    title: "Hold the line",
-    text: "Intercept incoming units, then resolve the wave before the relay overwhelms a gate.",
+    title: "Defend your tower",
+    text: "Intercept incoming units, then resolve the wave before the assault overwhelms a tower.",
   },
 ];
 
@@ -48,9 +48,9 @@ export default function Landing() {
             </div>
             <div>
               <p className="font-mono text-xs font-semibold tracking-[0.3em] text-cyan-200/80">
-                RELAYBOUND
+                LAN TOWER WARS
               </p>
-              <p className="text-[11px] text-slate-500">a tiny LAN defense game</p>
+              <p className="text-[11px] text-slate-500">a compact LAN strategy game for friends</p>
             </div>
           </div>
           <button
@@ -67,14 +67,14 @@ export default function Landing() {
           <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55 }}>
             <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-300/[0.08] px-3 py-1.5 font-mono text-xs tracking-wide text-amber-200">
               <Sparkles className="size-3.5" />
-              V1 · 2–4 PLAYERS · CO-OP
+              V1 · 2–4 PLAYERS · COMPETITIVE
             </div>
             <h1 className="max-w-3xl text-5xl font-semibold leading-[0.98] tracking-[-0.055em] text-white sm:text-7xl">
-              Pass the units.
-              <span className="block text-cyan-200">Protect the line.</span>
+              Send the units.
+              <span className="block text-cyan-200">Hold your tower.</span>
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-slate-400 sm:text-xl">
-              Relaybound is a fast, local multiplayer defense loop for friends on the same network. Send reinforcements to the player next to you, defend what arrives, and keep every gate standing.
+              LAN Tower Wars is a fast, local multiplayer strategy game for friends on the same network. Send units to the player next to you, defend what arrives, and be the last tower standing.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <button
@@ -82,7 +82,7 @@ export default function Landing() {
                 onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")}
                 className="group inline-flex h-12 items-center justify-center gap-3 rounded-xl bg-cyan-300 px-6 font-semibold text-slate-950 shadow-[0_10px_35px_rgba(34,211,238,0.18)] transition hover:-translate-y-0.5 hover:bg-cyan-200"
               >
-                Start a room
+                Start a match
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
               </button>
               <div className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-5 text-sm text-slate-400">
@@ -98,7 +98,7 @@ export default function Landing() {
               <div className="flex items-center justify-between border-b border-white/10 pb-4">
                 <div className="flex items-center gap-2 font-mono text-[11px] tracking-[0.2em] text-slate-400">
                   <span className="size-2 rounded-full bg-emerald-300 shadow-[0_0_12px_#6ee7b7]" />
-                  LIVE RELAY
+                  LIVE MATCH
                 </div>
                 <span className="rounded-full bg-white/[0.06] px-2.5 py-1 font-mono text-[10px] text-slate-500">WAVE 04</span>
               </div>
@@ -113,7 +113,7 @@ export default function Landing() {
                     <div className={`absolute left-0 top-0 h-1 w-full ${color === "cyan" ? "bg-cyan-300" : color === "rose" ? "bg-rose-300" : color === "amber" ? "bg-amber-300" : "bg-violet-300"}`} />
                     <div className="flex items-center justify-between text-[10px] font-semibold tracking-[0.18em] text-slate-400">
                       <span>{name}</span>
-                      <span className={index === 0 ? "text-cyan-200" : "text-slate-500"}>{index === 0 ? "YOUR GATE" : `P${index + 1}`}</span>
+                      <span className={index === 0 ? "text-cyan-200" : "text-slate-500"}>{index === 0 ? "YOUR TOWER" : `P${index + 1}`}</span>
                     </div>
                     <p className="mt-6 font-mono text-3xl text-white">{units}<span className="ml-1 text-sm text-slate-500">u</span></p>
                     <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${index === 0 ? "w-[84%] bg-cyan-300" : index === 1 ? "w-[62%] bg-rose-300" : index === 2 ? "w-[74%] bg-amber-300" : "w-[42%] bg-violet-300"}`} /></div>
@@ -124,7 +124,7 @@ export default function Landing() {
                 </div>
               </div>
               <div className="flex items-center justify-between rounded-xl border border-rose-300/20 bg-rose-300/[0.07] px-4 py-3">
-                <div className="flex items-center gap-2 text-sm text-rose-100"><Shield className="size-4" /> Incoming at your gate</div>
+                <div className="flex items-center gap-2 text-sm text-rose-100"><Shield className="size-4" /> Incoming at your tower</div>
                 <span className="font-mono text-lg text-rose-200">03</span>
               </div>
             </div>
@@ -137,7 +137,7 @@ export default function Landing() {
               <p className="font-mono text-xs tracking-[0.25em] text-cyan-200/70">THE WHOLE LOOP</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Small rules. Big coordination.</h2>
             </div>
-            <p className="max-w-sm text-sm leading-6 text-slate-500">No tech tree. No loadouts. Just a shared screen, a room code, and the panic of being next in the ring.</p>
+            <p className="max-w-sm text-sm leading-6 text-slate-500">No tech tree. No loadouts. Just a shared screen, a room code, and the pressure of choosing when to attack or defend.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {steps.map(({ number, icon: Icon, title, text }) => (
@@ -151,8 +151,8 @@ export default function Landing() {
         </section>
 
         <footer className="mt-16 flex flex-col gap-4 border-t border-white/10 pt-6 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-          <span>RELAYBOUND / VERSION 1</span>
-          <span>Made for close friends and questionable tactics.</span>
+          <span>LAN TOWER WARS / VERSION 1</span>
+          <span>Built for LAN nights, sharp tactics, and friendly rivalries.</span>
         </footer>
       </div>
     </main>

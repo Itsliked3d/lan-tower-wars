@@ -78,7 +78,7 @@ export const createRoom = mutation({
           defended: 0,
         },
       ],
-      lastAction: "Room created. Waiting for your crew.",
+      lastAction: "Match created. Waiting for the other players.",
       updatedAt: now,
     });
     return roomCode;
@@ -111,7 +111,7 @@ export const joinRoom = mutation({
     ];
     await ctx.db.patch(game._id, {
       players,
-      lastAction: `${cleanName(args.name)} joined the relay.`,
+      lastAction: `${cleanName(args.name)} joined the match.`,
       updatedAt: Date.now(),
     });
     return game.roomCode;
@@ -133,7 +133,7 @@ export const leaveRoom = mutation({
     }
     await ctx.db.patch(game._id, {
       players,
-      lastAction: `${leavingPlayer.name} left the room.`,
+      lastAction: `${leavingPlayer.name} left the match.`,
       updatedAt: Date.now(),
     });
   },
@@ -150,7 +150,7 @@ export const startGame = mutation({
 
     await ctx.db.patch(game._id, {
       status: "playing",
-      lastAction: "The relay is live. Send units clockwise and cover your neighbor.",
+      lastAction: "The match is live. Send units to your neighbor and defend your tower.",
       updatedAt: Date.now(),
     });
   },
@@ -161,7 +161,7 @@ export const sendUnits = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
     const game = await getGame(ctx, args.roomCode);
-    if (game.status !== "playing") throw new Error("The relay is not live yet.");
+    if (game.status !== "playing") throw new Error("The match is not live yet.");
     const index = game.players.findIndex((player) => player.userId === userId);
     if (index < 0) throw new Error("You are not in this room.");
     const amount = Math.floor(args.amount);
@@ -193,13 +193,13 @@ export const defendIncoming = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
     const game = await getGame(ctx, args.roomCode);
-    if (game.status !== "playing") throw new Error("The relay is not live yet.");
+    if (game.status !== "playing") throw new Error("The match is not live yet.");
     const index = game.players.findIndex((player) => player.userId === userId);
     if (index < 0) throw new Error("You are not in this room.");
     const player = game.players[index];
     const amount = Math.floor(args.amount);
     if (amount < 1 || amount > 5) throw new Error("Defend between 1 and 5 units.");
-    if (player.incoming < amount) throw new Error("There are not that many units at your gate.");
+    if (player.incoming < amount) throw new Error("There are not that many units at your tower.");
     if (player.shield < amount) throw new Error("You need more shield charge.");
 
     const players = game.players.map((current, currentIndex) =>
@@ -214,7 +214,7 @@ export const defendIncoming = mutation({
     );
     await ctx.db.patch(game._id, {
       players,
-      lastAction: `${player.name} intercepted ${amount} ${amount === 1 ? "unit" : "units"} at the gate.`,
+      lastAction: `${player.name} intercepted ${amount} ${amount === 1 ? "unit" : "units"} at the tower.`,
       updatedAt: Date.now(),
     });
   },
@@ -226,7 +226,7 @@ export const resolveWave = mutation({
     const userId = await requireUser(ctx);
     const game = await getGame(ctx, args.roomCode);
     if (game.players[0]?.userId !== userId) throw new Error("Only the room host can resolve a wave.");
-    if (game.status !== "playing") throw new Error("The relay is not live.");
+    if (game.status !== "playing") throw new Error("The match is not live.");
 
     const players = game.players.map((player) => ({
       ...player,
@@ -241,7 +241,7 @@ export const resolveWave = mutation({
       wave: game.wave + 1,
       status: isOver ? "ended" : "playing",
       lastAction: isOver
-        ? "A gate fell. The relay is over."
+        ? "A tower fell. The match is over."
         : `Wave ${game.wave} cleared. Supply crates restored 4 units and 2 shield charge.`,
       updatedAt: Date.now(),
     });

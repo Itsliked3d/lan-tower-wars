@@ -110,29 +110,33 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-[#080b14] text-slate-100">
 
       
       {/* Auth Content */}
       <div className="flex-1 flex items-center justify-center">
-        <div className="flex items-center justify-center h-full flex-col">
-        <Card className="min-w-[350px] pb-0 border shadow-md">
+        <div className="flex items-center justify-center h-full flex-col gap-6 px-4">
+        <div className="text-center">
+          <p className="font-mono text-xs font-semibold tracking-[0.3em] text-cyan-200">LAN TOWER WARS</p>
+          <p className="mt-2 text-sm text-slate-500">Local strategy for competitive LAN nights.</p>
+        </div>
+        <Card className="min-w-[350px] max-w-md border-white/10 bg-[#0f1729] pb-0 text-slate-100 shadow-2xl shadow-black/30">
           {step === "signIn" ? (
             <>
               <CardHeader className="text-center">
               <div className="flex justify-center">
                     <img
                       src={logo}
-                      alt="Lock Icon"
+                      alt="LAN Tower Wars insignia"
                       width={64}
                       height={64}
                       className="rounded-lg mb-4 mt-4 cursor-pointer"
                       onClick={() => navigate("/")}
                     />
                   </div>
-                <CardTitle className="text-xl">Get Started</CardTitle>
-                <CardDescription>
-                  Enter your email to log in or sign up
+                <CardTitle className="text-xl text-white">Enter the arena</CardTitle>
+                <CardDescription className="text-slate-500">
+                  Sign in to host or join a LAN Tower Wars match.
                 </CardDescription>
               </CardHeader>
               <form onSubmit={handleEmailSubmit}>
@@ -143,7 +147,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
                         name="email"
-                        placeholder="name@example.com"
+                        placeholder="captain@example.com"
                         type="email"
                         className="pl-9"
                         disabled={isLoading}
@@ -173,7 +177,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         <span className="w-full border-t" />
                       </div>
                       <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-background px-2 text-muted-foreground">
+                        <span className="bg-[#0f1729] px-2 text-slate-500">
                           Or
                         </span>
                       </div>
@@ -187,7 +191,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       disabled={isLoading}
                     >
                       <UserX className="mr-2 h-4 w-4" />
-                      Continue as Guest
+                      Enter as guest
                     </Button>
                   </div>
                 </CardContent>
@@ -196,9 +200,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           ) : (
             <>
               <CardHeader className="text-center mt-4">
-                <CardTitle>Check your email</CardTitle>
-                <CardDescription>
-                  We've sent a code to {step.email}
+                <CardTitle className="text-white">Check your inbox</CardTitle>
+                <CardDescription className="text-slate-500">
+                  We sent a verification code to {step.email}
                 </CardDescription>
               </CardHeader>
               <form onSubmit={handleOtpSubmit}>
@@ -234,7 +238,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       {error}
                     </p>
                   )}
-                  <p className="text-sm text-muted-foreground text-center mt-4">
+                  <p className="text-sm text-slate-500 text-center mt-4">
                     Didn't receive a code?{" "}
                     <Button
                       variant="link"
@@ -277,13 +281,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             </>
           )}
 
-          <div className="py-4 px-6 text-xs text-center text-muted-foreground bg-muted border-t rounded-b-lg">
-            Secured by{" "}
+          <div className="py-4 px-6 text-xs text-center text-slate-500 bg-black/20 border-t border-white/10 rounded-b-lg">
+            Authentication channel: {" "}
             <a
               href="https://freebuff.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline hover:text-primary transition-colors"
+              className="text-cyan-200 underline transition-colors hover:text-cyan-100"
             >
               freebuff.com
             </a>
