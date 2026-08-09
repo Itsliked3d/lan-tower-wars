@@ -30,7 +30,6 @@ const unitTypeValidator = v.union(
   v.literal("wraith_lord"),
   v.literal("titan"),
   v.literal("doomsday"),
-  v.literal("abuse_control"),
 );
 
 const towerTypeValidator = v.union(
@@ -134,7 +133,6 @@ const schema = defineSchema(
       lastAction: v.string(),
       updatedAt: v.number(),
       lastTick: v.optional(v.number()),
-      lastAbuseControlSpawn: v.optional(v.number()),
       isPractice: v.optional(v.boolean()),
     }).index("by_room_code", ["roomCode"]),
   },

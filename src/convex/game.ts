@@ -41,7 +41,7 @@ const UNIT_CONFIG: Record<string, UnitConfig> = {
   wraith_lord: { label: "Wraith Lord", cost: 8000, income: 150, hp: 500, speed: 2.5, damage: 100, tier: "endgame", flying: true, resistance: "physical" },
   titan: { label: "Titan", cost: 20000, income: 350, hp: 8000, speed: 0.15, damage: 400, tier: "endgame", resistance: "all" },
   doomsday: { label: "Doomsday", cost: 50000, income: 500, hp: 15000, speed: 0.1, damage: 800, tier: "endgame" },
-  abuse_control: { label: "Abuse Control", cost: 0, income: 0, hp: 10, speed: 1.45, damage: 2, tier: "budget" },
+
 } as const;
 
 const TOWER_CONFIG = {
@@ -273,7 +273,6 @@ export const createPracticeRoom = mutation({
       lastAction: "Practice mode — hone your maze against the bot.",
       updatedAt: now,
       lastTick: now,
-      lastAbuseControlSpawn: now,
       isPractice: true,
     });
     return roomCode;
@@ -336,7 +335,6 @@ export const startGame = mutation({
     await ctx.db.patch(game._id, {
       status: "playing",
       lastTick: now,
-      lastAbuseControlSpawn: now,
       lastAction: "The battle is live. Click empty grid cells to build a route around your towers.",
       updatedAt: now,
     });
@@ -551,9 +549,6 @@ export const tick = mutation({
     if (elapsed < 0.8) return;
 
     const isPractice = game.isPractice === true;
-    const previousAbuse = game.lastAbuseControlSpawn;
-    const abuseDue = previousAbuse !== undefined && now - previousAbuse >= 10000;
-    let abuseMessage = "";
     let leakMessage = "";
 
     const botPendingUnits: Array<Record<string, unknown>> = [];
@@ -612,27 +607,6 @@ export const tick = mutation({
 
       const route = pathForPlayer(botTowers.length > 0 ? botTowers : state.towers);
       let laneUnits = isBot ? state.laneUnits : state.laneUnits;
-
-      if (abuseDue && route) {
-        laneUnits = [
-          ...laneUnits,
-          {
-            id: createId("abuse-control"),
-            type: "abuse_control" as const,
-            position: 0,
-            hp: UNIT_CONFIG.abuse_control.hp,
-            x: START_POINT.x,
-            y: START_POINT.y,
-            path: route,
-            pathIndex: 0,
-            pathProgress: 0,
-            flying: false,
-          },
-        ];
-        abuseMessage = `Abuse Control: ${state.name}'s route reaches the goal.`;
-      } else if (abuseDue) {
-        abuseMessage = `Abuse Control: ${state.name}'s route is BLOCKED.`;
-      }
 
       const currentTowers = isBot ? botTowers : state.towers;
 
@@ -711,12 +685,6 @@ export const tick = mutation({
             const distance = Math.abs(location.x - towerLocation.x) + Math.abs(location.y - towerLocation.y);
             return unit.hp > 0 && distance <= range;
           });
-        // Prioritize Abuse Control units
-        inRange.sort((a, b) => {
-          if (a.unit.type === "abuse_control" && b.unit.type !== "abuse_control") return -1;
-          if (a.unit.type !== "abuse_control" && b.unit.type === "abuse_control") return 1;
-          return 0;
-        });
         const targets = config.splash ? inRange : inRange.slice(0, 1);
         for (const { unit, unitIndex } of targets) {
           const location = unitPoint(unit);
@@ -747,10 +715,7 @@ export const tick = mutation({
       const leaked = movedUnits.filter((unit) => unit.x === GRID_WIDTH - 1 && unit.hp > 0);
       if (leaked.length > 0) {
         const damage = leaked.reduce((total, unit) => total + (UNIT_CONFIG[unit.type]?.damage ?? 5), 0);
-        const abuseReached = leaked.some((unit) => unit.type === "abuse_control");
-        leakMessage = abuseReached
-          ? `Abuse Control reached ${state.name}'s goal — route confirmed.`
-          : `${state.name} lost ${damage} integrity.`;
+        leakMessage = `${state.name} lost ${damage} integrity.`;
       }
 
       const remainingUnits = movedUnits.filter((unit) => unit.hp > 0 && unit.x < GRID_WIDTH - 1);
@@ -783,9 +748,9 @@ export const tick = mutation({
     await ctx.db.patch(game._id, {
       players: finalPlayers,
       lastTick: now,
-      lastAbuseControlSpawn: abuseDue ? now : previousAbuse,
+
       status: ended ? "ended" : "playing",
-      lastAction: leakMessage || abuseMessage || game.lastAction,
+      lastAction: leakMessage || game.lastAction,
       updatedAt: now,
     });
   },

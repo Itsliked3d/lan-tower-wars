@@ -40,7 +40,6 @@ const UNIT_INFO: Record<string, { short: string; cost: number; hp: number; incom
   wraith_lord: { short: "Wraith Lord", cost: 8000, hp: 500, income: 150, tier: "endgame", icon: Ghost, flying: true, resistance: "physical" },
   titan: { short: "Titan", cost: 20000, hp: 8000, income: 350, tier: "endgame", icon: Castle, resistance: "all" },
   doomsday: { short: "Doomsday", cost: 50000, hp: 15000, income: 500, tier: "endgame", icon: Skull },
-  abuse_control: { short: "Abuse Control", cost: 0, hp: 10, income: 0, tier: "budget", icon: HelpCircle },
 };
 const UNIT_MAX_HP: Record<string, number> = Object.fromEntries(Object.entries(UNIT_INFO).map(([k, v]) => [k, v.hp]));
 
@@ -194,7 +193,6 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
       const info = UNIT_INFO[unit.type];
       const hpPct = Math.max(0, Math.min(100, (unit.hp / (info?.hp || UNIT_MAX_HP[unit.type] || 10)) * 100));
       const isFlying = !!(unit as { flying?: boolean }).flying;
-      const isAbuse = unit.type === "abuse_control";
       const Icon = info?.icon || HelpCircle;
       return (
         <div key={unit.id} className="absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-all duration-1000 ease-linear pointer-events-none"
@@ -202,15 +200,14 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
             left: `${((pt.x + 0.5) / GRID_WIDTH) * 100}%`,
             top: `${((pt.y + 0.5) / GRID_HEIGHT) * 100}%`,
           }}>
-          <div className={`relative flex items-center justify-center rounded-full border shadow-lg ${isAbuse ? "size-8 border-red-400 bg-red-500/30 text-red-100" : isFlying ? "size-7 border-sky-400 bg-sky-400/20 text-sky-100" : unit.type === "titan" || unit.type === "doomsday" ? "size-10 border-red-500 bg-red-600/30 text-red-100" : unit.type === "leviathan" || unit.type === "siege_breaker" ? "size-9 border-amber-400 bg-amber-500/25 text-amber-100" : unit.type === "juggernaut" || unit.type === "brute" ? "size-8 border-orange-400 bg-orange-400/25 text-orange-100" : "size-6 border-amber-300 bg-amber-300/20 text-amber-100"}`}>
-            {isAbuse ? <AlertTriangle className="size-4" /> : <Icon className="size-3" />}
+          <div className={`relative flex items-center justify-center rounded-full border shadow-lg ${isFlying ? "size-7 border-sky-400 bg-sky-400/20 text-sky-100" : unit.type === "titan" || unit.type === "doomsday" ? "size-10 border-red-500 bg-red-600/30 text-red-100" : unit.type === "leviathan" || unit.type === "siege_breaker" ? "size-9 border-amber-400 bg-amber-500/25 text-amber-100" : unit.type === "juggernaut" || unit.type === "brute" ? "size-8 border-orange-400 bg-orange-400/25 text-orange-100" : "size-6 border-amber-300 bg-amber-300/20 text-amber-100"}`}>
+            <Icon className="size-3" />
             {isFlying && <span className="absolute -top-3 text-[7px] text-sky-300">▲</span>}
           </div>
           {/* HP bar */}
           {!compact && <div className="absolute -top-3 left-1/2 h-0.5 w-6 -translate-x-1/2 overflow-hidden rounded-full bg-black/60">
-            <div className={`h-full rounded-full transition-[width] duration-500 ${isAbuse ? "bg-red-400" : hpPct > 50 ? "bg-emerald-300" : hpPct > 25 ? "bg-amber-300" : "bg-red-400"}`} style={{ width: `${hpPct}%` }} />
+            <div className={`h-full rounded-full transition-[width] duration-500 ${hpPct > 50 ? "bg-emerald-300" : hpPct > 25 ? "bg-amber-300" : "bg-red-400"}`} style={{ width: `${hpPct}%` }} />
           </div>}
-          {isAbuse && !compact && <span className="absolute left-1/2 top-7 -translate-x-1/2 whitespace-nowrap rounded bg-red-500/80 px-1 py-0.5 text-[7px] font-bold text-white">Audit</span>}
         </div>
       );
     })}
@@ -437,7 +434,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, on
             <span className="font-mono text-[9px] text-slate-600">BATTLEFIELD</span>
             <CardTitle className="text-sm text-white">{player.name}</CardTitle>
           </div>
-          <div className="flex items-center gap-1.5 rounded border border-red-300/15 bg-red-500/[0.06] px-2 py-0.5 text-[9px] text-red-200"><AlertTriangle className="size-3" />10s</div>
+
         </CardHeader>
         <CardContent className="pt-3 space-y-3">
           <GridLane player={player} selectedTowerType={selectedTowerType} onCellClick={(x, y) => onBuild(selectedTowerType, x, y)} onTowerClick={(id) => setSelectedTowerId(id === selectedTowerId ? null : id)} selectedTowerId={selectedTowerId} />
@@ -562,8 +559,8 @@ export default function Dashboard() {
         ) : showSetup ? (
           <>
             <div className="mx-auto mb-8 max-w-xl text-center">
-              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Build a maze. Pass the audit.</h1>
-              <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-500">Place towers on the grid to shape a route. Every 10s, Abuse Control checks the path still works. Send units to your neighbors — their gold becomes your income.</p>
+              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Build a maze. Defend your lane.</h1>
+              <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-500">Place towers on the grid to shape a route for enemy units. Send units to your neighbors — their gold becomes your income.</p>
             </div>
             <SetupScreen name={name} setName={setName} roomInput={roomInput} setRoomInput={setRoomInput} maxPlayers={maxPlayers} setMaxPlayers={setMaxPlayers} onCreate={handleCreate} onJoin={handleJoin} onPractice={handlePractice} isBusy={isBusy} error={error} />
           </>
