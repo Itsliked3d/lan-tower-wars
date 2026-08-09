@@ -403,7 +403,7 @@ function SetupScreen({ name, setName, roomInput, setRoomInput, maxPlayers, setMa
       <CardHeader className="pb-4"><div className="flex items-center gap-2"><div className="flex size-7 items-center justify-center rounded-lg bg-cyan-300/10"><Radio className="size-3.5 text-cyan-300" /></div><CardTitle className="text-base text-white">Host</CardTitle></div></CardHeader>
       <CardContent className="space-y-4">
         <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={18} placeholder="Your name" className="h-11 border-white/[0.08] bg-white/[0.02] text-white placeholder:text-slate-600 text-sm focus:border-cyan-300/30" />
-        <div className="grid grid-cols-3 gap-1.5">{[2, 3, 4].map((n) => <button key={n} type="button" onClick={() => setMaxPlayers(n)} className={`rounded-lg border py-2.5 text-xs font-medium transition-all ${maxPlayers === n ? "border-cyan-300/40 bg-cyan-300/10 text-cyan-100 shadow-[0_0_8px_1px_rgba(34,211,238,0.15)]" : "border-white/[0.05] bg-white/[0.01] text-slate-500 hover:border-white/15 hover:text-slate-300"}`}>{n} players</button>)}</div>
+        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">{[2, 3, 4, 5, 6, 7, 8].map((n) => <button key={n} type="button" onClick={() => setMaxPlayers(n)} className={`rounded-lg border py-2.5 text-xs font-medium transition-all ${maxPlayers === n ? "border-cyan-300/40 bg-cyan-300/10 text-cyan-100 shadow-[0_0_8px_1px_rgba(34,211,238,0.15)]" : "border-white/[0.05] bg-white/[0.01] text-slate-500 hover:border-white/15 hover:text-slate-300"}`}>{n} players</button>)}</div>
         <Button type="button" onClick={onCreate} disabled={isBusy || !name.trim()} className="h-11 w-full bg-gradient-to-r from-cyan-500 to-cyan-400 text-xs font-bold text-slate-950 shadow-[0_0_15px_1px_rgba(34,211,238,0.2)] hover:from-cyan-400 hover:to-cyan-300 disabled:opacity-40">Create room</Button>
       </CardContent>
     </Card>
@@ -440,7 +440,7 @@ function Lobby({ room, currentUserId, onStart, onLeave, isBusy, error }: { room:
       </div>
     </CardHeader>
     <CardContent className="space-y-5 pt-5">
-      <div className="grid gap-2.5 sm:grid-cols-2">
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: room.maxPlayers }).map((_, i) => {
           const p = room.players[i];
           return p ? <PlayerSeat key={String(p.userId)} player={p} index={i} isCurrent={String(p.userId) === currentUserId} isHost={i === 0} />
@@ -628,7 +628,7 @@ export default function Dashboard() {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [roomInput, setRoomInput] = useState("");
-  const [maxPlayers, setMaxPlayers] = useState(4);
+  const [maxPlayers, setMaxPlayers] = useState(8);
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const room = useQuery(api.game.getRoom, roomCode ? { roomCode } : "skip");

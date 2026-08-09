@@ -3,7 +3,16 @@ import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { v } from "convex/values";
 
-const COLORS = ["#fb7185", "#f59e0b", "#22d3ee", "#a78bfa"];
+const COLORS = [
+  "#fb7185",
+  "#f59e0b",
+  "#22d3ee",
+  "#a78bfa",
+  "#34d399",
+  "#60a5fa",
+  "#f472b6",
+  "#facc15",
+];
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const STARTING_GOLD = 30;
 const BASE_INCOME = 30;
@@ -256,7 +265,7 @@ export const createRoom = mutation({
   args: { name: v.string(), maxPlayers: v.number() },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
-    const maxPlayers = Math.min(4, Math.max(2, Math.floor(args.maxPlayers)));
+    const maxPlayers = Math.min(8, Math.max(2, Math.floor(args.maxPlayers)));
     let roomCode = createRoomCode();
     while (
       await ctx.db
