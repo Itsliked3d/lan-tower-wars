@@ -101,10 +101,11 @@ function findPathThroughTowers(towers: Player["towers"]): Set<string> {
 
 function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: string }) { return <div className="h-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full transition-[width] duration-500 ${color}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>; }
 
-// ── Prominent economy readout: wallet, payout income, and 15-second cadence ──
-function EconomyStrip({ player }: { player: Player }) {
+// ── Prominent economy readout: wallet, payout income, and next payout timer ──
+function EconomyStrip({ player, clock }: { player: Player; clock: number }) {
   const gold = goldOf(player);
   const income = incomeOf(player);
+  const secondsUntilIncome = Math.ceil((15_000 - (clock % 15_000)) / 1_000);
   return <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-gradient-to-r from-[#0b1120] via-[#0d1528] to-[#0b1120] px-4 py-3 shadow-lg">
     <div className="flex min-w-0 items-center gap-3">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-amber-300/25 bg-gradient-to-br from-amber-400/15 to-amber-500/5 shadow-[0_0_10px_1px_rgba(251,191,36,0.15)]"><Coins className="size-4 text-amber-300" /></span>
@@ -119,7 +120,10 @@ function EconomyStrip({ player }: { player: Player }) {
         <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-slate-500">Income / 15s</p>
         <p className="font-mono text-xl font-bold leading-tight text-emerald-100">+{income}<span className="ml-1 text-[10px] font-medium text-emerald-300/50">g</span></p>
       </div>
-      <span className="ml-1 hidden shrink-0 rounded-lg border border-emerald-300/10 bg-emerald-300/[0.04] px-2 py-1 text-[9px] font-medium text-emerald-300/70 md:block" title="Gold payout every 15 seconds">+{income}g / 15s</span>
+      <div className="ml-auto flex shrink-0 flex-col items-end gap-0.5 text-right">
+        <span className="hidden rounded-lg border border-emerald-300/10 bg-emerald-300/[0.04] px-2 py-1 text-[9px] font-medium text-emerald-300/70 md:block" title="Gold payout every 15 seconds">+{income}g / 15s</span>
+        <span className="font-mono text-[9px] font-semibold tabular-nums text-slate-400">next in <strong className="text-emerald-200">{secondsUntilIncome}s</strong></span>
+      </div>
     </div>
   </div>;
 }
@@ -516,7 +520,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
     {!matchComplete && !canAct && <div className="flex items-center gap-2 rounded-xl border border-rose-300/15 bg-rose-300/[0.04] px-4 py-2.5 text-[10px] text-rose-100/70"><Radar className="size-3.5 text-rose-300/80" />Spectating — the last remaining player wins the match.</div>}
 
     {/* Economy — always visible, full width */}
-    <EconomyStrip player={player} />
+    <EconomyStrip player={player} clock={clock} />
     {attacksLocked && canAct && <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.05] px-4 py-2.5 text-[10px] text-amber-100/80">
       <span className="flex items-center gap-2"><Radio className="size-3.5 text-amber-300" /><span><strong className="font-semibold text-amber-100">Attack phase locked.</strong> Build and prepare your defense.</span></span>
       <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-amber-200">{attackSecondsLeft}s</span>

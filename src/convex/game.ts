@@ -16,6 +16,8 @@ const COLORS = [
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const STARTING_GOLD = 200;
 const BASE_INCOME = 30;
+const INCOME_INTERVAL_MS = 15_000;
+const KILL_REWARD_RATE = 0.2;
 const ATTACK_DELAY_MS = 30_000;
 const GRID_WIDTH = 18;
 const GRID_HEIGHT = 10;
@@ -656,7 +658,7 @@ export const tick = mutation({
     if (elapsed < 0.8) return;
     const incomePayouts = Math.max(
       0,
-      Math.floor(now / 15000) - Math.floor(previousTick / 15000),
+      Math.floor(now / INCOME_INTERVAL_MS) - Math.floor(previousTick / INCOME_INTERVAL_MS),
     );
 
     const isPractice = game.isPractice === true;
@@ -846,10 +848,15 @@ export const tick = mutation({
         leakMessage = `${state.name} lost ${damage} integrity.`;
       }
 
+      const killedUnits = movedUnits.filter((unit) => unit.hp <= 0);
+      const killGold = killedUnits.reduce((total, unit) => {
+        const unitCost = UNIT_CONFIG[unit.type]?.cost ?? 0;
+        return total + Math.max(1, Math.floor(unitCost * KILL_REWARD_RATE));
+      }, 0);
       const remainingUnits = movedUnits.filter((unit) => unit.hp > 0 && unit.x < GRID_WIDTH - 1);
       return {
         ...state,
-        gold: (isBot ? botGold : state.gold) + incomePayouts * (isBot ? botIncome : state.income),
+        gold: (isBot ? botGold : state.gold) + incomePayouts * (isBot ? botIncome : state.income) + killGold,
         income: isBot ? botIncome : state.income,
         health: Math.max(0, state.health - leaked.reduce((total, unit) => total + (UNIT_CONFIG[unit.type]?.damage ?? 5), 0)),
         laneUnits: remainingUnits,
