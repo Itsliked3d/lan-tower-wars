@@ -476,6 +476,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
   const livingPlayers = room.players.filter((candidate) => candidate.health > 0);
   const matchComplete = livingPlayers.length <= 1;
   const winner = livingPlayers[0];
+  const isWinner = matchComplete && player.health > 0;
   const canAct = player.health > 0 && !matchComplete;
   const myTowers = towersOf(player);
   const selectedTower = selectedTowerId ? myTowers.find((t) => t.id === selectedTowerId) : null;
@@ -498,7 +499,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
       </div>
     </div>
 
-    {matchComplete && <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300/25 bg-gradient-to-r from-amber-300/[0.08] to-cyan-300/[0.05] px-4 py-3 text-[10px] text-amber-100/80"><span className="flex items-center gap-2"><Crown className="size-4 text-amber-300" /><strong className="font-semibold text-amber-100">{winner && String(winner.userId) === currentUserId ? "Victory" : "Match complete"}</strong><span>{winner ? `${winner.name} is the last player standing.` : "No player survived."}</span></span><span className="font-mono text-[9px] uppercase tracking-[0.15em] text-amber-300/60">Spectate</span></div>}
+    {matchComplete && <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300/25 bg-gradient-to-r from-amber-300/[0.08] to-cyan-300/[0.05] px-4 py-3 text-[10px] text-amber-100/80"><span className="flex items-center gap-2"><Crown className="size-4 text-amber-300" /><strong className="font-semibold text-amber-100">{isWinner ? "Victory" : "Match complete"}</strong><span>{isWinner ? "You are the last player standing." : winner ? `${winner.name} is the last player standing.` : "No player survived."}</span></span><span className="font-mono text-[9px] uppercase tracking-[0.15em] text-amber-300/60">Spectate</span></div>}
     {!matchComplete && !canAct && <div className="flex items-center gap-2 rounded-xl border border-rose-300/15 bg-rose-300/[0.04] px-4 py-2.5 text-[10px] text-rose-100/70"><Radar className="size-3.5 text-rose-300/80" />Spectating — the last remaining player wins the match.</div>}
 
     {/* Economy — always visible, full width */}
