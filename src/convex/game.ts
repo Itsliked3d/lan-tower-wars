@@ -408,6 +408,41 @@ export const buildTower = mutation({
   },
 });
 
+export const removeTower = mutation({
+  args: {
+    roomCode: v.string(),
+    towerId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx);
+    const game = await getGame(ctx, args.roomCode);
+    if (game.status !== "playing") throw new Error("The battle is not live yet.");
+    const index = game.players.findIndex((player) => player.userId === userId);
+    if (index < 0) throw new Error("You are not in this room.");
+
+    const player = normalizePlayer(game.players[index]);
+    const tower = player.towers.find((current) => current.id === args.towerId);
+    if (!tower) throw new Error("That tower is no longer on your lane.");
+
+    const level = tower.upgradeLevel ?? 0;
+    const investedGold = TOWER_CONFIG[tower.type].cost +
+      UPGRADE_COSTS.slice(0, level).reduce((total, cost) => total + cost, 0);
+    const refund = Math.floor(investedGold * 0.75);
+    const towers = player.towers.filter((current) => current.id !== args.towerId);
+    const players = game.players.map((current, currentIndex) =>
+      currentIndex === index
+        ? { ...player, gold: player.gold + refund, towers }
+        : normalizePlayer(current),
+    );
+
+    await ctx.db.patch(game._id, {
+      players,
+      lastAction: `${player.name} removed a ${TOWER_CONFIG[tower.type].label} (+${refund}g refund)`,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const upgradeTower = mutation({
   args: {
     roomCode: v.string(),
