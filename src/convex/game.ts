@@ -617,13 +617,16 @@ export const tick = mutation({
           : findPath(currentTowers, start);
         if (!path) return { ...unit, x: start.x, y: start.y };
 
-        let pathIndex = 0;
+        // Flying units always path from the origin, so they need their
+        // cumulative pathIndex restored — otherwise distance resets each tick.
+        // Ground units get a fresh path from their current cell, so start at 0.
+        let pathIndex = unit.flying ? (unit.pathIndex ?? 0) : 0;
         let pathProgress = (unit.pathProgress ?? 0) + (UNIT_CONFIG[unit.type]?.speed ?? 1) * elapsed;
         while (pathIndex < path.length - 1 && pathProgress >= 1) {
           pathIndex += 1;
           pathProgress -= 1;
         }
-        const point = path[pathIndex];
+        const point = path[Math.min(pathIndex, path.length - 1)];
         return {
           ...unit,
           x: point.x,
