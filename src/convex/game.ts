@@ -10,7 +10,10 @@ const BASE_INCOME = 2;
 const GRID_WIDTH = 14;
 const GRID_HEIGHT = 8;
 const START_POINT = { x: 0, y: 4 };
-const FLYING_PATH: GridPoint[] = Array.from({ length: GRID_WIDTH }, (_, x) => ({ x, y: START_POINT.y }));
+
+function flyingPathFor(y: number): GridPoint[] {
+  return Array.from({ length: GRID_WIDTH }, (_, x) => ({ x, y }));
+}
 
 type UnitConfig = {
   label: string;
@@ -141,6 +144,21 @@ function unitPoint(unit: { x?: number; y?: number; position: number }): GridPoin
   };
 }
 
+function spawnPointFor(target: Player): GridPoint {
+  const occupiedEntryRows = new Set(
+    (target.laneUnits ?? [])
+      .map(unitPoint)
+      .filter((point) => point.x === 0)
+      .map((point) => point.y),
+  );
+  const preferredY = (target.laneUnits ?? []).length % GRID_HEIGHT;
+  for (let offset = 0; offset < GRID_HEIGHT; offset += 1) {
+    const y = (preferredY + offset) % GRID_HEIGHT;
+    if (!occupiedEntryRows.has(y)) return { x: 0, y };
+  }
+  return { x: 0, y: preferredY };
+}
+
 function pointKey(point: GridPoint) {
   return `${point.x}:${point.y}`;
 }
@@ -183,10 +201,6 @@ function findPath(towers: TowerLike[], start: GridPoint): GridPoint[] | null {
   }
 
   return null;
-}
-
-function pathForPlayer(towers: Player["towers"]) {
-  return findPath(towers ?? [], START_POINT);
 }
 
 async function requireUser(ctx: MutationCtx) {
@@ -522,12 +536,14 @@ export const sendUnit = mutation({
     if (!config) throw new Error("Unknown unit type.");
     if (player.gold < config.cost) throw new Error(`You need ${config.cost} gold for that unit.`);
 
-    // Flying units ignore towers — they always have a direct path.
+    const spawn = spawnPointFor(target);
+    // Each unit enters through a different open tile in the first column.
+    // Flying units keep a straight line on their own spawn row.
     let path: GridPoint[] | null;
     if (config.flying) {
-      path = FLYING_PATH;
+      path = flyingPathFor(spawn.y);
     } else {
-      path = pathForPlayer(target.towers);
+      path = findPath(target.towers, spawn);
       if (!path) throw new Error(`${target.name}'s route is blocked. They need to open a path first.`);
     }
 
@@ -536,8 +552,8 @@ export const sendUnit = mutation({
       type: args.unitType,
       position: 0,
       hp: config.hp,
-      x: START_POINT.x,
-      y: START_POINT.y,
+      x: spawn.x,
+      y: spawn.y,
       path,
       pathIndex: 0,
       pathProgress: 0,
@@ -618,15 +634,16 @@ export const tick = mutation({
             botSent += 1;
             const humanPlayer = game.players[0];
             const humanState = normalizePlayer(humanPlayer);
-            const route = pathForPlayer(humanState.towers);
+            const spawn = spawnPointFor(humanState);
+            const route = cfg.flying ? flyingPathFor(spawn.y) : findPath(humanState.towers, spawn);
             if (route) {
               botPendingUnits.push({
                 id: createId(pick),
                 type: pick,
                 position: 0,
                 hp: cfg.hp,
-                x: START_POINT.x,
-                y: START_POINT.y,
+                x: spawn.x,
+                y: spawn.y,
                 path: route,
                 pathIndex: 0,
                 pathProgress: 0,
@@ -648,7 +665,7 @@ export const tick = mutation({
 
       const movedUnits = state.laneUnits.map((unit) => {
         const start = unitPoint(unit);
-        const path = unit.flying ? FLYING_PATH : groundPathFor(start);
+        const path = unit.flying ? flyingPathFor(start.y) : groundPathFor(start);
         if (!path) return { ...unit, x: start.x, y: start.y };
 
         // Flying units use a stable origin-to-goal path and keep cumulative
