@@ -156,10 +156,10 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
         const isGoal = x === GRID_WIDTH - 1;
         const canBuild = !compact && !tower && !isStart && !isGoal && Boolean(onCellClick);
 
-        return <button
+        return <div
           key={cellKey}
-          type="button"
-          disabled={!canBuild && !tower}
+          role="button"
+          tabIndex={canBuild || tower ? 0 : -1}
           onClick={() => { if (canBuild) onCellClick?.(x, y); if (tower && onTowerClick) onTowerClick(tower.id); }}
           className={`relative border-r border-b border-white/[0.04] transition-colors ${isStart ? "bg-cyan-300/[0.05]" : isGoal ? "bg-rose-300/[0.05]" : route.has(cellKey) ? "bg-emerald-300/[0.02]" : ""} ${canBuild ? "cursor-crosshair hover:bg-cyan-300/20" : ""} ${tower && onTowerClick ? "cursor-pointer hover:brightness-125" : ""} ${tower && tower.id === selectedTowerId ? "ring-1 ring-cyan-300/60" : ""}`}
           title={canBuild ? `Place ${selectedTowerType ? TOWER_INFO[selectedTowerType].short : "tower"} at ${x + 1}/${y + 1}` : tower ? `${TOWER_INFO[tower.type].short}${(tower.upgradeLevel ?? 0) > 0 ? ` LV.${tower.upgradeLevel}` : ""} — click to upgrade` : undefined}
@@ -172,7 +172,7 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
               {!compact && (tower.upgradeLevel ?? 0) > 0 && <span className="absolute -bottom-0.5 text-[6px] font-mono text-cyan-300/80">L{tower.upgradeLevel}</span>}
             </div>
           )}
-        </button>;
+        </div>;
       })}
     </div>
 
