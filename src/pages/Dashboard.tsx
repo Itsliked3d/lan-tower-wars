@@ -112,7 +112,7 @@ function findPathThroughTowers(towers: Player["towers"]): Set<string> {
   return new Set();
 }
 
-function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: string }) { return <div className="h-2 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10"><div className={`h-full rounded-full transition-[width] duration-500 ${color} shadow-[0_0_8px_1px_currentColor]`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>; }
+function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: string }) { return <div className="h-2 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10"><div className={`h-full rounded-full transition-[width] duration-500 ${color} shadow-[0_0_10px_2px_currentColor]`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>; }
 
 // ── Prominent economy readout: wallet, payout income, and next payout timer ──
 function EconomyStrip({ player, clock }: { player: Player; clock: number }) {
@@ -407,8 +407,8 @@ function PlayerSeat({ player, index, isCurrent, isHost }: { player: Player; inde
         </div>
       </div>
       <div className="rounded-lg border border-rose-300/20 bg-rose-300/[0.06] px-2 py-1 text-right shadow-[0_0_12px_1px_rgba(251,113,133,0.08)]">
-        <span className="block font-mono text-lg font-bold leading-none text-rose-100">{player.health}</span>
-        <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.16em] text-rose-300/75">hp</span>
+        <span className="block font-mono text-lg font-bold leading-none text-rose-100 tabular-nums">{player.health}</span>
+        <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.16em] text-rose-300/90">hp</span>
       </div>
     </div>
     <div className="mt-2"><StatBar value={player.health} color={isCurrent ? "bg-gradient-to-r from-cyan-400 to-cyan-300" : "bg-gradient-to-r from-slate-600 to-slate-500"} /></div>
