@@ -3,13 +3,11 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useAuth } from "@/hooks/use-auth";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, Castle, Coins, Crosshair, Crown, Flame, Footprints, Hammer, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, Zap } from "lucide-react";
+import { AlertTriangle, Castle, Coins, Crosshair, Crown, Flame, Footprints, Hammer, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, Users, Zap } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
 type Game = Doc<"games">;
@@ -182,7 +180,7 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
     {units.map((unit) => {
       const pt = unitPoint(unit);
       const hpPct = Math.max(0, Math.min(100, (unit.hp / (UNIT_MAX_HP[unit.type] || 10)) * 100));
-      const isFlying = !!(unit as any).flying;
+      const isFlying = !!(unit as { flying?: boolean }).flying;
       return (
         <div key={unit.id} className="absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-all duration-1000 ease-linear pointer-events-none"
           style={{
@@ -291,7 +289,7 @@ function SetupScreen({ name, setName, roomInput, setRoomInput, maxPlayers, setMa
 
 function Lobby({ room, currentUserId, onStart, onLeave, isBusy, error }: { room: Game; currentUserId?: string; onStart: () => void; onLeave: () => void; isBusy: boolean; error: string | null }) {
   const isHost = String(room.players[0]?.userId) === currentUserId;
-  const isPractice = !!(room as any).isPractice;
+  const isPractice = !!(room as unknown as { isPractice?: boolean }).isPractice;
   return <Card className="mx-auto w-full max-w-3xl border-white/[0.07] bg-[#0b1120]">
     <CardHeader className="border-b border-white/5 pb-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -468,11 +466,10 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, on
 }
 
 export default function Dashboard() {
-  const { user, signOut, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { signIn } = useAuthActions();
-  const navigate = useNavigate();
   const [roomCode, setRoomCode] = useState<string | null>(null);
-  const [name, setName] = useState(() => user?.name ?? "");
+  const [name, setName] = useState("");
   const [roomInput, setRoomInput] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [error, setError] = useState<string | null>(null);
@@ -487,7 +484,7 @@ export default function Dashboard() {
   const sendUnit = useMutation(api.game.sendUnit);
   const upgradeTower = useMutation(api.game.upgradeTower);
   const tick = useMutation(api.game.tick);
-  const currentUserId = user?._id ? String(user._id) : undefined;
+  const currentUserId = undefined;
   const isLoadingRoom = Boolean(roomCode && room === undefined);
   const showSetup = !roomCode || room === null;
   const roomStatus = room?.status ?? "lobby";
@@ -537,11 +534,11 @@ export default function Dashboard() {
     catch { toast.info(`Code: ${room.roomCode}`); }
   };
 
-  const handleSignOut = async () => { await signOut(); navigate("/"); };
+
 
   // Show loading while auth is resolving
   if (authLoading) {
-    return <main className="flex min-h-screen items-center justify-center bg-[#080b14]"><Sparkles className="size-5 animate-pulse text-cyan-200" /></main>;
+    return <main className="flex min-h-screen items-center justify-center bg-[#080b14]"><div className="flex flex-col items-center gap-3"><Sparkles className="size-5 animate-pulse text-cyan-200" /><span className="text-xs text-slate-500">connecting…</span></div></main>;
   }
 
   return <main className="min-h-screen bg-[#080b14] text-slate-100">
@@ -553,8 +550,7 @@ export default function Dashboard() {
           <span className="font-mono text-[11px] font-semibold tracking-[0.2em] text-cyan-100">LAN TOWER WARS</span>
         </div>
         <div className="flex items-center gap-2">
-          {user?.name && <span className="hidden text-[10px] text-slate-600 sm:inline">{user.name}</span>}
-          {isAuthenticated && <Button type="button" variant="ghost" size="sm" onClick={handleSignOut} className="text-[10px] text-slate-500 hover:text-white"><LogOut className="size-3" /></Button>}
+          {name && <span className="text-[10px] text-slate-500">{name}</span>}
         </div>
       </header>
 
@@ -574,7 +570,7 @@ export default function Dashboard() {
         ) : roomStatus === "playing" ? (
           <GameBoard room={room!} currentUserId={currentUserId}
             onBuild={(t, x, y) => run(() => buildTower({ roomCode: roomCode!, towerType: t, x, y }))}
-            onSend={(unitType) => run(() => sendUnit({ roomCode: roomCode!, unitType: unitType as any }))}
+            onSend={(unitType: string) => run(() => sendUnit({ roomCode: roomCode!, unitType: unitType as "soldier" }))}
             onUpgrade={(towerId, branch) => run(() => upgradeTower({ roomCode: roomCode!, towerId, branch }))}
             onCopy={handleCopy} onLeave={handleLeave} isBusy={isBusy} error={error} />
         ) : (

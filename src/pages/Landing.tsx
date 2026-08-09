@@ -6,13 +6,9 @@ import {
   Radio,
   Shield,
   Sparkles,
-  Users,
   Zap,
 } from "lucide-react";
-import { useEffect } from "react";
 import { useNavigate } from "react-router";
-import { useAuth } from "@/hooks/use-auth";
-import { useAuthActions } from "@convex-dev/auth/react";
 
 const steps = [
   {
@@ -37,16 +33,6 @@ const steps = [
 
 export default function Landing() {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading } = useAuth();
-  const { signIn } = useAuthActions();
-
-  // Auto anonymous sign-in
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      signIn("anonymous").catch(() => {});
-    }
-  }, [isLoading, isAuthenticated, signIn]);
-
   const goToDashboard = () => navigate("/dashboard");
 
   return (
@@ -60,7 +46,7 @@ export default function Landing() {
             </div>
             <div>
               <p className="font-mono text-xs font-semibold tracking-[0.3em] text-cyan-200/80">LAN TOWER WARS</p>
-              <p className="text-[10px] text-slate-500">maze defense · 2–4 players</p>
+              <p className="text-[10px] text-slate-500">maze defense · 2–4 players · no login</p>
             </div>
           </div>
           <button type="button" onClick={goToDashboard} className="hidden items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-4 py-2 text-xs text-slate-300 transition hover:border-cyan-300/35 hover:bg-cyan-300/8 hover:text-cyan-100 sm:flex">
