@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useMutation, useQuery } from "convex/react";
-import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, Bird, Castle, Coins, Crosshair, Crown, Flame, Footprints, Ghost, Hammer, HelpCircle, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, Turtle, Users, Zap } from "lucide-react";
+import { Bird, Castle, Coins, Crosshair, Crown, Flame, Footprints, Ghost, Hammer, HelpCircle, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, Turtle, Users, Zap } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -86,7 +85,7 @@ function findPathThroughTowers(towers: Player["towers"]): Set<string> {
   return new Set();
 }
 
-function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: string }) { return <div className="h-1 overflow-hidden rounded-full bg-white/10"><motion.div animate={{ width: `${Math.max(0, Math.min(100, value))}%` }} className={`h-full rounded-full ${color}`} /></div>; }
+function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: string }) { return <div className="h-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full transition-[width] duration-500 ${color}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>; }
 
 function EconomyPill({ player, compact }: { player: Player; compact?: boolean }) {
   const gold = goldOf(player);
@@ -113,7 +112,7 @@ function ProjectileLayer({ projectiles }: { projectiles: Projectile[] }) {
         if (p.towerType === "close") {
           // Pulse: expanding ring wave
           return <div key={p.id} className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2" style={{ left, top }}>
-            <motion.div initial={{ scale: 0.4, opacity: 0.9 }} animate={{ scale: 1.6, opacity: 0 }} transition={{ duration: 0.8, ease: "easeOut" }} className="size-6 rounded-full border-2 border-cyan-300/70 shadow-[0_0_12px_4px_rgba(34,211,238,0.5)]" />
+            <div className="proj-pulse size-6 rounded-full border-2 border-cyan-300/70 shadow-[0_0_12px_4px_rgba(34,211,238,0.5)]" />
           </div>;
         }
 
@@ -130,18 +129,18 @@ function ProjectileLayer({ projectiles }: { projectiles: Projectile[] }) {
           // Arc: lightning bolt
           return <div key={p.id} className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2" style={{ left, top }}>
             <svg width="24" height="24" viewBox="0 0 24 24" className="drop-shadow-[0_0_8px_rgba(251,146,60,0.8)]">
-              <motion.path d="M10 2 L4 14 L11 13 L8 22 L20 10 L13 11 Z" fill="#fb923c" initial={{ opacity: 0.6 }} animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 0.3, repeat: Infinity }} />
+              <path className="proj-flicker" d="M10 2 L4 14 L11 13 L8 22 L20 10 L13 11 Z" fill="#fb923c" />
             </svg>
           </div>;
         }
 
         // Snare: net
         return <div key={p.id} className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2" style={{ left, top }}>
-          <motion.div initial={{ rotate: 0, scale: 0.6 }} animate={{ rotate: 45, scale: 1.2 }} transition={{ duration: 0.6, ease: "easeOut" }} className="size-4 border border-emerald-300/60 shadow-[0_0_6px_2px_rgba(110,231,183,0.4)]" style={{ clipPath: "polygon(0 0, 100% 0, 100% 100%, 0 100%)" }}>
+          <div className="proj-spin size-4 border border-emerald-300/60 shadow-[0_0_6px_2px_rgba(110,231,183,0.4)]">
             <div className="absolute inset-0 grid grid-cols-3 grid-rows-3">
               {Array.from({ length: 9 }).map((_, i) => <div key={i} className="border-[0.5px] border-emerald-300/30" />)}
             </div>
-          </motion.div>
+          </div>
         </div>;
       })}
     </>
@@ -227,8 +226,8 @@ function TowerUpgradeModal({ tower, player, onUpgrade, onClose, isBusy }: { towe
   const info = TOWER_INFO[tower.type];
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="w-80 rounded-2xl border border-white/10 bg-[#0f1729] p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="modal-pop w-80 rounded-2xl border border-white/10 bg-[#0f1729] p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             {React.createElement(info.icon, { className: "size-4 text-cyan-200" })}
@@ -258,8 +257,8 @@ function TowerUpgradeModal({ tower, player, onUpgrade, onClose, isBusy }: { towe
             </div>
           </>
         )}
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }
 
@@ -471,9 +470,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, on
     {error && <p className="rounded-lg border border-rose-300/15 bg-rose-300/[0.06] px-3 py-2 text-[11px] text-rose-200">{error}</p>}
 
     {/* Tower upgrade modal */}
-    <AnimatePresence>
-      {selectedTower && <TowerUpgradeModal tower={selectedTower} player={player} onUpgrade={(branch) => { onUpgrade(selectedTower.id, branch); setSelectedTowerId(null); }} onClose={() => setSelectedTowerId(null)} isBusy={isBusy} />}
-    </AnimatePresence>
+    {selectedTower && <TowerUpgradeModal tower={selectedTower} player={player} onUpgrade={(branch) => { onUpgrade(selectedTower.id, branch); setSelectedTowerId(null); }} onClose={() => setSelectedTowerId(null)} isBusy={isBusy} />}
   </div>;
 }
 
