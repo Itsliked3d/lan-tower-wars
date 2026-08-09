@@ -1,0 +1,17 @@
+{
+  "name": "LAN Tower Wars",
+  "short_name": "Tower Wars",
+  "description": "A competitive pass-along tower defense game for friends on a LAN.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080b14",
+  "theme_color": "#080b14",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
