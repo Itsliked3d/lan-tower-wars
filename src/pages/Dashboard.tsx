@@ -28,15 +28,14 @@ function mageElementFor(tower: TowerRecord | Projectile): MageElement {
 }
 
 const GRID_WIDTH = 18;
-const PLAYER_HP_LABEL = "PLAYER HP";
 const GRID_HEIGHT = 10;
 const ATTACK_DELAY_SECONDS = 30;
 
-const TOWER_INFO: Record<TowerType, { short: string; cost: number; range: string; icon: typeof Target }> = {
-  close: { short: "Pulse", cost: 15, range: "r1 · 10dps", icon: Target },
-  far: { short: "Rail", cost: 25, range: "r3 · 4dps", icon: Radar },
-  splash: { short: "Mage", cost: 45, range: "r2 · adaptive", icon: Sparkles },
-  slow: { short: "Snare", cost: 30, range: "r2 · 3dps · slow", icon: Ruler },
+const TOWER_INFO: Record<TowerType, { short: string; cost: number; range: string; rangeCells: number; icon: typeof Target }> = {
+  close: { short: "Pulse", cost: 15, range: "r1 · 10dps", rangeCells: 1, icon: Target },
+  far: { short: "Rail", cost: 25, range: "r3 · 4dps", rangeCells: 3, icon: Radar },
+  splash: { short: "Mage", cost: 45, range: "r2 · adaptive", rangeCells: 2, icon: Sparkles },
+  slow: { short: "Snare", cost: 30, range: "r2 · 3dps · slow", rangeCells: 2, icon: Ruler },
 };
 
 const MAGE_ELEMENT_INFO: Record<MageElement, { label: string; counter: string; icon: typeof Flame; text: string; border: string; background: string; glow: string }> = {
@@ -90,7 +89,6 @@ function unitPoint(unit: NonNullable<Player["laneUnits"]>[number]): GridPoint { 
 function pointKey(point: GridPoint) { return `${point.x}:${point.y}`; }
 
 function findVisualPath(towers: Player["towers"]): Set<string> {
-  // The route overlay shows the ground route; flying units intentionally ignore it.
   return findPathThroughTowers(towers);
 }
 
@@ -117,7 +115,6 @@ function StatBar({ value, color = "bg-cyan-300" }: { value: number; color?: stri
   return <div className="h-2 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10" aria-label={`HP ${Math.round(value)}`}><div className={`h-full rounded-full transition-[width] duration-500 ${color} shadow-[0_0_10px_2px_currentColor]`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>;
 }
 
-// ── Prominent economy readout: wallet, payout income, and next payout timer ──
 function EconomyStrip({ player, clock }: { player: Player; clock: number }) {
   const gold = goldOf(player);
   const income = incomeOf(player);
@@ -144,87 +141,21 @@ function EconomyStrip({ player, clock }: { player: Player; clock: number }) {
   </div>;
 }
 
-// ── Themed projectiles ──
 function ProjectileLayer({ projectiles }: { projectiles: Projectile[] }) {
-  return (
-    <>
-      {projectiles.map((p) => {
-        const progress = Math.max(0, Math.min(1, p.progress));
-        const x = p.x + (p.targetX - p.x) * progress;
-        const y = p.y + (p.targetY - p.y) * progress;
-        const left = `${((x + 0.5) / GRID_WIDTH) * 100}%`;
-        const top = `${((y + 0.5) / GRID_HEIGHT) * 100}%`;
-
-        if (p.towerType === "close") {
-          // Pulse: concentric expanding rings
-          return <div key={p.id} className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2" style={{ left, top }}>
-            <div className="proj-pulse size-5 rounded-full border-[1.5px] border-cyan-300/80" style={{ color: "#22d3ee" }} />
-            <div className="proj-pulse absolute inset-0 m-auto size-3 rounded-full border-[1.5px] border-cyan-300/60" style={{ animationDelay: "0.15s", color: "#22d3ee" }} />
-            <div className="proj-pulse-ring absolute inset-0 m-auto size-2 rounded-full bg-cyan-300/15" style={{ color: "#22d3ee" }} />
-          </div>;
-        }
-
-        if (p.towerType === "far") {
-          // Rail: thin beam with glow trail
-          const angle = Math.atan2(p.targetY - p.y, p.targetX - p.x) * (180 / Math.PI);
-          const length = Math.sqrt((p.targetX - p.x) ** 2 + (p.targetY - p.y) ** 2) * 100 / GRID_WIDTH;
-          return <div key={p.id} className="pointer-events-none absolute z-20 origin-left" style={{ left, top, transform: `rotate(${angle}deg)`, width: `${length}%` }}>
-            <div className="proj-beam h-[1.5px]">
-              <div className="h-full w-full bg-gradient-to-r from-transparent via-violet-300 to-transparent shadow-[0_0_6px_3px_rgba(167,139,250,0.8)]" />
-            </div>
-          </div>;
-        }
-
-        if (p.towerType === "splash") {
-          const element = mageElementFor(p);
-          const info = MAGE_ELEMENT_INFO[element];
-          const Icon = info.icon;
-          return <div key={p.id} className={`pointer-events-none absolute z-20 flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center`} style={{ left, top }}>
-            <div className={`proj-mage-orb flex size-7 items-center justify-center rounded-full border-2 ${info.border} ${info.background}`}>
-              <Icon className={`size-4 ${info.text} drop-shadow-[0_0_6px_currentColor]`} />
-            </div>
-          </div>;
-        }
-
-        // Snare: spinning diamond net
-        return <div key={p.id} className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2" style={{ left, top }}>
-          <div className="proj-spin size-5 rotate-45 border-2 border-emerald-300/50 shadow-[0_0_8px_2px_rgba(110,231,183,0.5)]">
-            <div className="absolute inset-0 grid grid-cols-3 grid-rows-3">
-              {Array.from({ length: 9 }).map((_, i) => <div key={i} className="border-[0.5px] border-emerald-300/25" />)}
-            </div>
-          </div>
-        </div>;
-      })}
-    </>
-  );
+  return <>{projectiles.map((p) => { const progress = Math.max(0, Math.min(1, p.progress)); const x = p.x + (p.targetX - p.x) * progress; const y = p.y + (p.targetY - p.y) * progress; const color = p.towerType === "far" ? "bg-violet-300" : p.towerType === "splash" ? "bg-fuchsia-300" : p.towerType === "slow" ? "bg-emerald-300" : "bg-cyan-300"; return <span key={p.id} className={`pointer-events-none absolute z-20 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_8px_3px_currentColor] ${color}`} style={{ left: `${((x + 0.5) / GRID_WIDTH) * 100}%`, top: `${((y + 0.5) / GRID_HEIGHT) * 100}%` }} />; })}</>;
 }
 
-// ── Grid lane with smooth unit movement ──
 function GridLane({ player, compact = false, selectedTowerType, selectedMageElement, onCellClick, onTowerClick, selectedTowerId }: { player: Player; compact?: boolean; selectedTowerType?: TowerType; selectedMageElement?: MageElement; onCellClick?: (x: number, y: number) => void; onTowerClick?: (towerId: string) => void; selectedTowerId?: string | null }) {
   const towers = towersOf(player);
   const units = unitsOf(player);
   const projectiles = projectilesOf(player);
-  useEffect(() => {
-    document.querySelectorAll<HTMLElement>("p").forEach((label) => {
-      if (label.textContent?.trim() !== "integrity") return;
-      label.textContent = PLAYER_HP_LABEL;
-      label.className = "text-[8px] font-bold uppercase tracking-[0.16em] text-rose-300/90";
-      const card = label.parentElement;
-      card?.classList.add("rounded-xl", "border-rose-300/25", "bg-rose-300/[0.08]", "shadow-[0_0_14px_1px_rgba(251,113,133,0.1)]");
-      card?.querySelector("p:first-child")?.classList.add("text-base", "font-bold", "text-rose-50");
-    });
-    document.querySelectorAll<HTMLElement>("span.font-mono").forEach((health) => {
-      if (!/^\\d+%$/.test(health.textContent?.trim() ?? "")) return;
-      health.textContent = `${health.textContent?.trim().replace("%", "")} hp`;
-      health.className = "font-mono text-rose-200/80";
-    });
-  }, [player.health]);
-  const towerSignature = towers.map((tower) => `${tower.id}:${tower.x ?? ""}:${tower.y ?? ""}:${tower.type}:${tower.element ?? ""}:${tower.upgradeLevel ?? 0}`).join("|");
+  const selectedTower = selectedTowerId ? towers.find((tower) => tower.id === selectedTowerId) : null;
+  const selectedRange = selectedTower ? TOWER_INFO[selectedTower.type].rangeCells + (selectedTower.upgradeBranch === "control" ? (selectedTower.upgradeLevel ?? 0) : 0) : 0;
+  const towerSignature = towers.map((tower) => `${tower.id}:${tower.x ?? ""}:${tower.y ?? ""}:${tower.type}:${tower.element ?? ""}:${tower.upgradeBranch ?? ""}:${tower.upgradeLevel ?? 0}`).join("|");
   const route = useMemo(() => findVisualPath(player.towers), [towerSignature]);
   const towerMap = useMemo(() => new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower])), [towerSignature]);
 
   return <div className="relative aspect-[18/10] overflow-hidden rounded-lg border border-white/[0.06] bg-[#040810]">
-    {/* Grid dot overlay */}
     <div className="pointer-events-none absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle, rgba(148,163,184,0.8) 1px, transparent 1px)", backgroundSize: `${100 / GRID_WIDTH}% ${100 / GRID_HEIGHT}%` }} />
 
     <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${GRID_WIDTH}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${GRID_HEIGHT}, minmax(0, 1fr))` }}>
@@ -237,6 +168,7 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
         const isGoal = x === GRID_WIDTH - 1;
         const canBuild = !compact && !tower && !isStart && !isGoal && Boolean(onCellClick);
         const onPath = route.has(cellKey);
+        const isRangeCell = !compact && Boolean(selectedTower) && Math.abs(x - towerPoint(selectedTower!).x) + Math.abs(y - towerPoint(selectedTower!).y) <= selectedRange;
 
         return <div
           key={cellKey}
@@ -248,7 +180,7 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
             : isGoal ? "goal-glow bg-gradient-to-l from-rose-400/[0.06] to-transparent"
             : onPath ? "bg-emerald-400/[0.03]"
             : ""
-          } ${canBuild ? "cursor-crosshair hover:bg-cyan-300/25 hover:border-cyan-300/15" : ""} ${tower && onTowerClick ? "cursor-pointer hover:brightness-[1.4]" : ""} ${tower && tower.id === selectedTowerId ? "ring-1 ring-cyan-300/70 z-[5]" : ""} ${tower && tower.type === "splash" ? MAGE_ELEMENT_INFO[mageElementFor(tower)].glow : ""}`}
+          } ${canBuild ? "cursor-crosshair hover:bg-cyan-300/25 hover:border-cyan-300/15" : ""} ${tower && onTowerClick ? "cursor-pointer hover:brightness-[1.4]" : ""} ${isRangeCell ? "bg-cyan-300/[0.12] ring-1 ring-inset ring-cyan-300/25" : ""} ${tower && tower.id === selectedTowerId ? "ring-1 ring-cyan-300/70 z-[5]" : ""} ${tower && tower.type === "splash" ? MAGE_ELEMENT_INFO[mageElementFor(tower)].glow : ""}`}
           title={canBuild ? `Place ${selectedTowerType ? TOWER_INFO[selectedTowerType].short : "tower"}${selectedTowerType === "splash" ? ` · ${MAGE_ELEMENT_INFO[selectedMageElement ?? "fire"].label}` : ""} at ${x + 1}/${y + 1}` : tower ? `${towerInfoFor(tower.type).short}${tower.type === "splash" ? ` · ${MAGE_ELEMENT_INFO[mageElementFor(tower)].label}` : ""}${(tower.upgradeLevel ?? 0) > 0 ? ` LV.${tower.upgradeLevel}` : ""} — click to upgrade` : undefined}
         >
           {isStart && !compact && <span className="absolute left-0.5 top-0.5 text-[7px] font-mono text-cyan-200/40 tracking-[0.15em]">IN</span>}
@@ -296,13 +228,11 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
       })}
     </div>
 
-    {/* Units with smooth CSS position transitions */}
     {units.map((unit) => {
       const pt = unitPoint(unit);
       const info = UNIT_INFO[unit.type];
       const hpPct = Math.max(0, Math.min(100, (unit.hp / (info?.hp || UNIT_MAX_HP[unit.type] || 10)) * 100));
       const isFlying = !!(unit as { flying?: boolean }).flying;
-      const hasResist = !!(info?.resistance);
       const Icon = info?.icon || HelpCircle;
       const isBig = unit.type === "titan" || unit.type === "doomsday";
       const isLarge = unit.type === "leviathan" || unit.type === "siege_breaker";
@@ -321,22 +251,9 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
             left: `${((pt.x + 0.5) / GRID_WIDTH) * 100}%`,
             top: `${((pt.y + 0.5) / GRID_HEIGHT) * 100}%`,
           }}>
-          {/* Resistance aura ring */}
-          {hasResist && !compact && (
-            <div className={`absolute -inset-1 rounded-full border opacity-40 ${info.resistance === "all" ? "border-purple-400/50 shadow-[0_0_6px_2px_rgba(168,85,247,0.3)]" : info.resistance === "physical" ? "border-gray-400/50 shadow-[0_0_6px_2px_rgba(156,163,175,0.3)]" : info.resistance === "splash" ? "border-orange-400/40 shadow-[0_0_6px_2px_rgba(251,146,60,0.25)]" : "border-sky-400/40 shadow-[0_0_6px_2px_rgba(56,189,248,0.25)]"}`} />
-          )}
           <div className={`relative flex items-center justify-center rounded-full border-2 shadow-lg ${sizeClass} ${borderClass}`}>
             <Icon className={`${isBig ? "size-4" : isLarge ? "size-3.5" : "size-3"}`} />
-            {isFlying && !compact && (
-              <>
-                <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-300 opacity-40" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-300" />
-                </span>
-              </>
-            )}
           </div>
-          {/* Unit HP bar */}
           {!compact && (
             <div className="absolute -top-3 left-1/2 h-1.5 w-9 -translate-x-1/2 overflow-hidden rounded-full bg-black/80 ring-1 ring-white/20 shadow-[0_0_5px_1px_rgba(0,0,0,0.55)]" aria-label="Unit HP">
               <div
@@ -354,60 +271,10 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
   </div>;
 }
 
-// ── Tower upgrade modal ──
-function TowerUpgradeModal({ tower, player, onUpgrade, onRemove, onClose, isBusy }: { tower: NonNullable<Player["towers"]>[number]; player: Player; onUpgrade: (branch: "power" | "control") => void; onRemove: () => void; onClose: () => void; isBusy: boolean }) {
-  const level = tower.upgradeLevel ?? 0;
-  const locked = tower.upgradeBranch;
-  const cost = UPGRADE_COSTS[level] ?? 600;
-  const gold = goldOf(player);
-  const info = towerInfoFor(tower.type);
-  const mageElement = tower.type === "splash" ? mageElementFor(tower) : null;
-  const refund = Math.floor((info.cost + UPGRADE_COSTS.slice(0, level).reduce((total, upgradeCost) => total + upgradeCost, 0)) * 0.75);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="modal-pop w-80 rounded-2xl border border-white/10 bg-[#0f1729] p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            {React.createElement(mageElement ? MAGE_ELEMENT_INFO[mageElement].icon : info.icon, { className: `size-4 ${mageElement ? MAGE_ELEMENT_INFO[mageElement].text : "text-cyan-200"}` })}
-            <span className="text-sm font-semibold text-white">{info.short}</span>
-            <span className="font-mono text-[10px] text-cyan-300">LV.{level}</span>
-          </div>
-          <button type="button" onClick={onClose} className="text-slate-500 hover:text-white text-lg leading-none">&times;</button>
-        </div>
-        <p className="text-[11px] text-slate-400 mb-1">{info.range}</p>
-        {mageElement && <p className={`mb-3 text-[10px] ${MAGE_ELEMENT_INFO[mageElement].text}`}>{MAGE_ELEMENT_INFO[mageElement].label} · {MAGE_ELEMENT_INFO[mageElement].counter}</p>}
-        {locked && <p className="text-[10px] text-slate-500 mb-3">Locked to <span className="text-cyan-300">{locked}</span> branch</p>}
-        {level >= 3 ? (
-          <p className="text-[11px] text-amber-200/70">Maximum level reached.</p>
-        ) : (
-          <>
-            <p className="text-[10px] text-slate-500 mb-3">Upgrade cost: <span className="font-mono text-amber-200">{cost}g</span></p>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" disabled={isBusy || gold < cost || (Boolean(locked) && locked !== "power")}
-                onClick={() => onUpgrade("power")}
-                className="rounded-lg border border-orange-300/20 bg-orange-300/[0.06] px-3 py-2.5 text-left text-[11px] text-orange-100 transition hover:border-orange-300/50 disabled:cursor-not-allowed disabled:opacity-30">
-                <span className="block font-semibold text-xs">POWER</span><span className="mt-0.5 block text-[10px] text-orange-100/60">+20% dmg / lv</span>
-              </button>
-              <button type="button" disabled={isBusy || gold < cost || (Boolean(locked) && locked !== "control")}
-                onClick={() => onUpgrade("control")}
-                className="rounded-lg border border-emerald-300/20 bg-emerald-300/[0.06] px-3 py-2.5 text-left text-[11px] text-emerald-100 transition hover:border-emerald-300/50 disabled:cursor-not-allowed disabled:opacity-30">
-                <span className="block font-semibold text-xs">CONTROL</span><span className="mt-0.5 block text-[10px] text-emerald-100/60">+1 range / lv</span>
-              </button>
-            </div>
-          </>
-        )}
-        <div className="mt-4 border-t border-white/5 pt-3">
-          <button type="button" onClick={onRemove} disabled={isBusy}
-            className="flex w-full items-center justify-between rounded-lg border border-rose-300/15 bg-rose-300/[0.04] px-3 py-2 text-left text-[10px] text-rose-200/80 transition hover:border-rose-300/40 hover:bg-rose-300/[0.08] disabled:cursor-not-allowed disabled:opacity-30">
-            <span className="flex items-center gap-1.5"><Trash2 className="size-3" />Remove tower</span>
-            <span className="font-mono text-emerald-200/80">+{refund}g refund</span>
-          </button>
-          <p className="mt-1.5 text-[9px] text-slate-600">Refunds 75% of this tower's build and upgrade cost.</p>
-        </div>
-      </div>
-    </div>
-  );
+function TowerUpgradeModal({ tower, player, onUpgrade, onBulkUpgrade, onRemove, onClose, isBusy }: { tower: NonNullable<Player["towers"]>[number]; player: Player; onUpgrade: (branch: "power" | "control") => void; onBulkUpgrade?: (type: TowerType, level: number, branch: "power" | "control") => void; onRemove: () => void; onClose: () => void; isBusy: boolean }) {
+  const level = tower.upgradeLevel ?? 0; const locked = tower.upgradeBranch; const cost = UPGRADE_COSTS[level] ?? 600; const gold = goldOf(player); const info = towerInfoFor(tower.type); const refund = Math.floor((info.cost + UPGRADE_COSTS.slice(0, level).reduce((total, value) => total + value, 0)) * 0.75);
+  const matching = towersOf(player).filter((current) => current.type === tower.type && (current.upgradeLevel ?? 0) === level).length;
+  return <div className="rounded-xl border border-cyan-300/15 bg-cyan-300/[0.035] p-3"><div className="rounded-xl border border-white/10 bg-[#0f1729] p-4 shadow-lg"><div className="mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><info.icon className="size-4 text-cyan-200" /><span className="text-sm font-semibold text-white">{info.short}</span><span className="font-mono text-[10px] text-cyan-300">LV.{level}</span></div><button type="button" onClick={onClose} className="text-lg text-slate-500 hover:text-white">&times;</button></div><p className="mb-2 text-[11px] text-slate-400">Range {info.range} · highlighted cells are in range</p>{locked && <p className="mb-2 text-[10px] text-slate-500">Locked to <span className="text-cyan-300">{locked}</span></p>}{level < 3 && <div className="grid grid-cols-2 gap-2"><button type="button" disabled={isBusy || gold < cost || (Boolean(locked) && locked !== "power")} onClick={() => onUpgrade("power")} className="rounded-lg border border-orange-300/20 bg-orange-300/[0.06] px-2 py-2 text-xs text-orange-100 disabled:opacity-30">POWER · {cost}g</button><button type="button" disabled={isBusy || gold < cost || (Boolean(locked) && locked !== "control")} onClick={() => onUpgrade("control")} className="rounded-lg border border-emerald-300/20 bg-emerald-300/[0.06] px-2 py-2 text-xs text-emerald-100 disabled:opacity-30">CONTROL · {cost}g</button></div>}<button type="button" disabled={isBusy || level >= 3 || matching === 0} onClick={() => onBulkUpgrade?.(tower.type, level, "control")} className="mt-2 w-full rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] px-2 py-2 text-left text-[10px] text-cyan-100 disabled:opacity-30">Upgrade all {matching} {info.short} towers at L{level} · {matching * cost}g</button><button type="button" onClick={onRemove} disabled={isBusy} className="mt-3 flex w-full items-center justify-between rounded-lg border border-rose-300/15 bg-rose-300/[0.04] px-2 py-2 text-left text-[10px] text-rose-200/80 disabled:opacity-30"><span className="flex items-center gap-1.5"><Trash2 className="size-3" />Remove tower</span><span className="font-mono text-emerald-200/80">+{refund}g refund</span></button></div></div>;
 }
 
 function PlayerSeat({ player, index, isCurrent, isHost }: { player: Player; index: number; isCurrent: boolean; isHost: boolean }) {
@@ -527,6 +394,9 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
   const canSend = canAct && !attacksLocked;
   const myTowers = towersOf(player);
   const selectedTower = selectedTowerId ? myTowers.find((t) => t.id === selectedTowerId) : null;
+  const onBulkUpgrade = (type: TowerType, level: number, branch: "power" | "control") => {
+    myTowers.filter((tower) => tower.type === type && (tower.upgradeLevel ?? 0) === level && (!tower.upgradeBranch || tower.upgradeBranch === branch)).forEach((tower) => onUpgrade(tower.id, branch));
+  };
 
   const tabUnits = (Object.entries(UNIT_INFO) as [UnitType, typeof UNIT_INFO[UnitType]][]).filter(([, info]) => info.tier === unitTab);
 
@@ -689,7 +559,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
     {error && <p className="rounded-lg border border-rose-300/15 bg-rose-300/[0.06] px-3 py-2 text-[11px] text-rose-200">{error}</p>}
 
     {/* Tower upgrade modal */}
-    {selectedTower && canAct && <TowerUpgradeModal tower={selectedTower} player={player} onUpgrade={(branch) => { onUpgrade(selectedTower.id, branch); setSelectedTowerId(null); }} onRemove={() => { onRemove(selectedTower.id); setSelectedTowerId(null); }} onClose={() => setSelectedTowerId(null)} isBusy={isBusy} />}
+    {selectedTower && canAct && <TowerUpgradeModal tower={selectedTower} player={player} onUpgrade={(branch) => { onUpgrade(selectedTower.id, branch); setSelectedTowerId(null); }} onBulkUpgrade={onBulkUpgrade} onRemove={() => { onRemove(selectedTower.id); setSelectedTowerId(null); }} onClose={() => setSelectedTowerId(null)} isBusy={isBusy} />}
   </div>;
 }
 

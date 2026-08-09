@@ -600,6 +600,58 @@ export const upgradeTower = mutation({
   },
 });
 
+export const upgradeMatchingTowers = mutation({
+  args: {
+    roomCode: v.string(),
+    towerType: v.union(
+      v.literal("close"),
+      v.literal("far"),
+      v.literal("splash"),
+      v.literal("slow"),
+    ),
+    targetLevel: v.number(),
+    branch: v.union(v.literal("power"), v.literal("control")),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx);
+    const game = await getGame(ctx, args.roomCode);
+    if (game.status !== "playing") throw new Error("The battle is not live yet.");
+    const index = game.players.findIndex((player) => player.userId === userId);
+    if (index < 0) throw new Error("You are not in this room.");
+
+    const player = normalizePlayer(game.players[index]);
+    if (player.health <= 0) throw new Error("You have been eliminated and can only spectate.");
+    if (game.players.filter((candidate) => candidate.health > 0).length <= 1) throw new Error("The match is over. You can only spectate.");
+    const level = Math.floor(args.targetLevel);
+    if (level < 0 || level >= UPGRADE_COSTS.length) throw new Error("That tower level cannot be upgraded.");
+
+    const matching = player.towers.filter((tower) =>
+      tower.type === args.towerType &&
+      (tower.upgradeLevel ?? 0) === level &&
+      (!tower.upgradeBranch || tower.upgradeBranch === args.branch),
+    );
+    if (matching.length === 0) throw new Error("No compatible towers match that type and level.");
+    const cost = matching.length * UPGRADE_COSTS[level];
+    if (player.gold < cost) throw new Error(`You need ${cost} gold for ${matching.length} upgrades.`);
+
+    const matchingIds = new Set(matching.map((tower) => tower.id));
+    const towers = player.towers.map((tower) => matchingIds.has(tower.id)
+      ? { ...tower, upgradeBranch: args.branch, upgradeLevel: level + 1 }
+      : tower,
+    );
+    const players = game.players.map((current, currentIndex) =>
+      currentIndex === index
+        ? { ...player, gold: player.gold - cost, towers }
+        : normalizePlayer(current),
+    );
+    await ctx.db.patch(game._id, {
+      players,
+      lastAction: `${player.name} upgraded ${matching.length} ${TOWER_CONFIG[args.towerType].label}s ${args.branch} → L${level + 1}`,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 const ALL_SENDABLE_UNITS = v.union(
   v.literal("soldier"),
   v.literal("scout"),

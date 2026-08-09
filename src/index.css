@@ -258,6 +258,6 @@ footer > span:last-child {
 }
 
 footer > span:last-child::after {
-  content: "v1.0";
+  content: "V.1.0.1";
   font-size: 9px;
 }
