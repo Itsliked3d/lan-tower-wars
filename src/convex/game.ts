@@ -14,8 +14,9 @@ const COLORS = [
   "#facc15",
 ];
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const STARTING_GOLD = 30;
+const STARTING_GOLD = 200;
 const BASE_INCOME = 30;
+const ATTACK_DELAY_MS = 30_000;
 const GRID_WIDTH = 18;
 const GRID_HEIGHT = 10;
 const START_POINT = { x: 0, y: 5 };
@@ -302,7 +303,7 @@ export const createPracticeRoom = mutation({
     const botBase = createPlayer(botId, "BOT", COLORS[1]);
     const bot: Player = {
       ...botBase,
-      gold: 20,
+      gold: STARTING_GOLD,
       towers: [
         { id: createId("tower"), type: "close" as const, position: 22, hp: 100, x: 4, y: 5, upgradeLevel: 0 },
         { id: createId("tower"), type: "far" as const, position: 57, hp: 100, x: 8, y: 3, upgradeLevel: 0 },
@@ -318,6 +319,7 @@ export const createPracticeRoom = mutation({
       lastAction: "Practice mode — hone your maze against the bot.",
       updatedAt: now,
       lastTick: now,
+      startedAt: now,
       isPractice: true,
     });
     return roomCode;
@@ -380,7 +382,8 @@ export const startGame = mutation({
     await ctx.db.patch(game._id, {
       status: "playing",
       lastTick: now,
-      lastAction: "The battle is live. Click empty grid cells to build a route around your towers.",
+      startedAt: now,
+      lastAction: "The battle is live. Build your route now; attacks unlock in 30 seconds.",
       updatedAt: now,
     });
   },
@@ -576,6 +579,10 @@ export const sendUnit = mutation({
     const player = normalizePlayer(game.players[index]);
     if (player.health <= 0) throw new Error("You have been eliminated and can only spectate.");
     if (game.players.filter((candidate) => candidate.health > 0).length <= 1) throw new Error("The match is over. You can only spectate.");
+    if (game.startedAt !== undefined && Date.now() - game.startedAt < ATTACK_DELAY_MS) {
+      const secondsLeft = Math.ceil((game.startedAt + ATTACK_DELAY_MS - Date.now()) / 1000);
+      throw new Error(`Attacks unlock in ${secondsLeft}s.`);
+    }
     const targetIndex = Array.from({ length: game.players.length - 1 }, (_, offset) =>
       (index + offset + 1) % game.players.length,
     ).find((candidateIndex) => game.players[candidateIndex].health > 0);
@@ -643,6 +650,7 @@ export const tick = mutation({
     if (game.players.filter((player) => player.health > 0).length <= 1) return;
 
     const now = Date.now();
+    const attackUnlocked = game.startedAt === undefined || now - game.startedAt >= ATTACK_DELAY_MS;
     const previousTick = game.lastTick ?? now;
     const elapsed = Math.min(3, Math.max(0, (now - previousTick) / 1000));
     if (elapsed < 0.8) return;
@@ -678,7 +686,7 @@ export const tick = mutation({
           }
         }
         // Bot sends a unit every ~8s
-        if (Math.random() < 0.12) {
+        if (attackUnlocked && Math.random() < 0.12) {
           const types = ["soldier", "scout", "runner", "grunt"];
           const pick = types[Math.floor(Math.random() * types.length)];
           const cfg = UNIT_CONFIG[pick];

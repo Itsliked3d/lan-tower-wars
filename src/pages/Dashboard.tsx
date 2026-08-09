@@ -29,6 +29,7 @@ function mageElementFor(tower: TowerRecord | Projectile): MageElement {
 
 const GRID_WIDTH = 18;
 const GRID_HEIGHT = 10;
+const ATTACK_DELAY_SECONDS = 30;
 
 const TOWER_INFO: Record<TowerType, { short: string; cost: number; range: string; icon: typeof Target }> = {
   close: { short: "Pulse", cost: 15, range: "r1 · 10dps", icon: Target },
@@ -65,7 +66,7 @@ const UNIT_MAX_HP: Record<string, number> = Object.fromEntries(Object.entries(UN
 const UPGRADE_COSTS = [75, 225, 600];
 
 function friendlyError(error: unknown) { return error instanceof Error ? error.message.replace(/^Error: /, "") : "Something went wrong."; }
-function goldOf(player: Player) { return player.gold ?? 30; }
+function goldOf(player: Player) { return player.gold ?? 200; }
 function incomeOf(player: Player) { return player.income ?? 30; }
 function unitsOf(player: Player) { return player.laneUnits ?? []; }
 function towersOf(player: Player) { return player.towers ?? []; }
@@ -470,6 +471,13 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
   const [selectedMageElement, setSelectedMageElement] = useState<MageElement>("fire");
   const [selectedTowerId, setSelectedTowerId] = useState<string | null>(null);
   const [unitTab, setUnitTab] = useState<"budget" | "mid" | "endgame">("budget");
+  const [clock, setClock] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (room.startedAt === undefined) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [room.startedAt]);
 
   if (!player) return null;
   const gold = goldOf(player);
@@ -478,6 +486,11 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
   const winner = livingPlayers[0];
   const isWinner = matchComplete && player.health > 0;
   const canAct = player.health > 0 && !matchComplete;
+  const attackSecondsLeft = room.startedAt === undefined
+    ? 0
+    : Math.max(0, Math.ceil((room.startedAt + ATTACK_DELAY_SECONDS * 1000 - clock) / 1000));
+  const attacksLocked = attackSecondsLeft > 0;
+  const canSend = canAct && !attacksLocked;
   const myTowers = towersOf(player);
   const selectedTower = selectedTowerId ? myTowers.find((t) => t.id === selectedTowerId) : null;
 
@@ -504,6 +517,10 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
 
     {/* Economy — always visible, full width */}
     <EconomyStrip player={player} />
+    {attacksLocked && canAct && <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.05] px-4 py-2.5 text-[10px] text-amber-100/80">
+      <span className="flex items-center gap-2"><Radio className="size-3.5 text-amber-300" /><span><strong className="font-semibold text-amber-100">Attack phase locked.</strong> Build and prepare your defense.</span></span>
+      <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-amber-200">{attackSecondsLeft}s</span>
+    </div>}
 
     {/* Three-column layout */}
     <div className="grid gap-4 xl:grid-cols-[0.85fr_1.6fr_0.85fr]">
@@ -545,7 +562,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
           {/* Unit shop with tabs */}
           <div className="border-t border-white/5 pt-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[9px] uppercase tracking-wider text-slate-500">Send to {nextPlayer?.name}</span>
+              <span className="text-[9px] uppercase tracking-wider text-slate-500">{attacksLocked ? `Attack phase · unlocks in ${attackSecondsLeft}s` : `Send to ${nextPlayer?.name}`}</span>
             </div>
             <div className="flex gap-1 mb-2">
               {(["budget", "mid", "endgame"] as const).map((tab) => (
@@ -559,8 +576,8 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
               {tabUnits.map(([type, info]) => {
                 const Icon = info.icon;
                 return <button key={type} type="button" onClick={() => onSend(type)}
-                  disabled={gold < info.cost || isBusy}
-                  className={`rounded-lg border p-2 text-left transition ${gold < info.cost ? "border-white/3 bg-white/[0.01] opacity-30 cursor-not-allowed" : "border-white/6 bg-white/[0.02] hover:border-amber-300/30 hover:-translate-y-0.5"}`}>
+                  disabled={!canSend || gold < info.cost || isBusy}
+                  className={`rounded-lg border p-2 text-left transition ${!canSend || gold < info.cost ? "border-white/3 bg-white/[0.01] opacity-30 cursor-not-allowed" : "border-white/6 bg-white/[0.02] hover:border-amber-300/30 hover:-translate-y-0.5"}`}>
                   <div className="flex items-center justify-between">
                     <Icon className="size-3 text-amber-200" />
                     <span className="font-mono text-[9px] text-amber-200">{info.cost.toLocaleString()}g</span>

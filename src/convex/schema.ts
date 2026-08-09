@@ -142,6 +142,7 @@ const schema = defineSchema(
       lastAction: v.string(),
       updatedAt: v.number(),
       lastTick: v.optional(v.number()),
+      startedAt: v.optional(v.number()),
       isPractice: v.optional(v.boolean()),
     }).index("by_room_code", ["roomCode"]),
   },
