@@ -11,18 +11,36 @@ import { toast } from "sonner";
 type Game = Doc<"games">;
 type Player = Game["players"][number];
 type TowerType = "close" | "far" | "splash" | "slow";
+type MageElement = "fire" | "frost" | "storm" | "void";
 type UnitType = "soldier" | "scout" | "runner" | "grunt" | "slinger" | "brute" | "raider" | "juggernaut" | "phantom" | "siege_breaker" | "leviathan" | "wraith_lord" | "titan" | "doomsday";
 
 type GridPoint = { x: number; y: number };
 type Projectile = NonNullable<Player["projectiles"]>[number];
+type TowerRecord = NonNullable<Player["towers"]>[number];
+
+function towerInfoFor(type: TowerRecord["type"]) {
+  return TOWER_INFO[type];
+}
+
+function mageElementFor(tower: TowerRecord | Projectile): MageElement {
+  return tower.element ?? "fire";
+}
+
 const GRID_WIDTH = 14;
 const GRID_HEIGHT = 8;
 
 const TOWER_INFO: Record<TowerType, { short: string; cost: number; range: string; icon: typeof Target }> = {
   close: { short: "Pulse", cost: 15, range: "r1 · 10dps", icon: Target },
   far: { short: "Rail", cost: 25, range: "r3 · 4dps", icon: Radar },
-  splash: { short: "Arc", cost: 35, range: "r2 · 6dps · AOE", icon: Sparkles },
+  splash: { short: "Mage", cost: 45, range: "r2 · adaptive", icon: Sparkles },
   slow: { short: "Snare", cost: 30, range: "r2 · 3dps · slow", icon: Ruler },
+};
+
+const MAGE_ELEMENT_INFO: Record<MageElement, { label: string; counter: string; icon: typeof Flame; text: string; border: string; background: string }> = {
+  fire: { label: "Fire", counter: "breaks splash resist", icon: Flame, text: "text-orange-200", border: "border-orange-300/40", background: "bg-orange-300/10" },
+  frost: { label: "Frost", counter: "checks fast units", icon: Ruler, text: "text-sky-200", border: "border-sky-300/40", background: "bg-sky-300/10" },
+  storm: { label: "Storm", counter: "hunts flyers", icon: Zap, text: "text-yellow-200", border: "border-yellow-300/40", background: "bg-yellow-300/10" },
+  void: { label: "Void", counter: "pierces heavy resist", icon: Sparkles, text: "text-fuchsia-200", border: "border-fuchsia-300/40", background: "bg-fuchsia-300/10" },
 };
 
 const UNIT_INFO: Record<UnitType, { short: string; cost: number; hp: number; income: number; tier: string; icon: typeof Footprints; flying?: boolean; resistance?: string }> = {
@@ -132,11 +150,11 @@ function ProjectileLayer({ projectiles }: { projectiles: Projectile[] }) {
         }
 
         if (p.towerType === "splash") {
-          // Arc: lightning bolt
-          return <div key={p.id} className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2" style={{ left, top }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" className="drop-shadow-[0_0_8px_rgba(251,146,60,0.8)]">
-              <path className="proj-flicker" d="M10 2 L4 14 L11 13 L8 22 L20 10 L13 11 Z" fill="#fb923c" />
-            </svg>
+          const element = mageElementFor(p);
+          const info = MAGE_ELEMENT_INFO[element];
+          const Icon = info.icon;
+          return <div key={p.id} className={`pointer-events-none absolute z-20 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border shadow-[0_0_12px_3px_currentColor] ${info.text} ${info.border} ${info.background}`} style={{ left, top }}>
+            <Icon className="size-3.5 proj-flicker" />
           </div>;
         }
 
@@ -154,11 +172,11 @@ function ProjectileLayer({ projectiles }: { projectiles: Projectile[] }) {
 }
 
 // ── Grid lane with smooth unit movement ──
-function GridLane({ player, compact = false, selectedTowerType, onCellClick, onTowerClick, selectedTowerId }: { player: Player; compact?: boolean; selectedTowerType?: TowerType; onCellClick?: (x: number, y: number) => void; onTowerClick?: (towerId: string) => void; selectedTowerId?: string | null }) {
+function GridLane({ player, compact = false, selectedTowerType, selectedMageElement, onCellClick, onTowerClick, selectedTowerId }: { player: Player; compact?: boolean; selectedTowerType?: TowerType; selectedMageElement?: MageElement; onCellClick?: (x: number, y: number) => void; onTowerClick?: (towerId: string) => void; selectedTowerId?: string | null }) {
   const towers = towersOf(player);
   const units = unitsOf(player);
   const projectiles = projectilesOf(player);
-  const towerSignature = towers.map((tower) => `${tower.id}:${tower.x ?? ""}:${tower.y ?? ""}:${tower.type}:${tower.upgradeLevel ?? 0}`).join("|");
+  const towerSignature = towers.map((tower) => `${tower.id}:${tower.x ?? ""}:${tower.y ?? ""}:${tower.type}:${tower.element ?? ""}:${tower.upgradeLevel ?? 0}`).join("|");
   const route = useMemo(() => findVisualPath(player.towers), [towerSignature]);
   const towerMap = useMemo(() => new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower])), [towerSignature]);
 
@@ -179,13 +197,13 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
           tabIndex={canBuild || tower ? 0 : -1}
           onClick={() => { if (canBuild) onCellClick?.(x, y); if (tower && onTowerClick) onTowerClick(tower.id); }}
           className={`relative border-r border-b border-white/[0.04] transition-colors ${isStart ? "bg-cyan-300/[0.05]" : isGoal ? "bg-rose-300/[0.05]" : route.has(cellKey) ? "bg-emerald-300/[0.02]" : ""} ${canBuild ? "cursor-crosshair hover:bg-cyan-300/20" : ""} ${tower && onTowerClick ? "cursor-pointer hover:brightness-125" : ""} ${tower && tower.id === selectedTowerId ? "ring-1 ring-cyan-300/60" : ""}`}
-          title={canBuild ? `Place ${selectedTowerType ? TOWER_INFO[selectedTowerType].short : "tower"} at ${x + 1}/${y + 1}` : tower ? `${TOWER_INFO[tower.type].short}${(tower.upgradeLevel ?? 0) > 0 ? ` LV.${tower.upgradeLevel}` : ""} — click to upgrade` : undefined}
+          title={canBuild ? `Place ${selectedTowerType ? TOWER_INFO[selectedTowerType].short : "tower"}${selectedTowerType === "splash" ? ` · ${MAGE_ELEMENT_INFO[selectedMageElement ?? "fire"].label}` : ""} at ${x + 1}/${y + 1}` : tower ? `${towerInfoFor(tower.type).short}${tower.type === "splash" ? ` · ${MAGE_ELEMENT_INFO[mageElementFor(tower)].label}` : ""}${(tower.upgradeLevel ?? 0) > 0 ? ` LV.${tower.upgradeLevel}` : ""} — click to upgrade` : undefined}
         >
           {isStart && !compact && <span className="absolute left-0.5 top-0.5 text-[7px] font-mono text-cyan-200/50">IN</span>}
           {isGoal && !compact && <span className="absolute right-0.5 top-0.5 text-[7px] font-mono text-rose-200/50">GOAL</span>}
           {tower && (
-            <div className={`flex size-full items-center justify-center ${tower.type === "close" ? "text-cyan-200/90" : tower.type === "far" ? "text-violet-200/90" : tower.type === "splash" ? "text-orange-200/90" : "text-emerald-200/90"}`}>
-              {React.createElement(TOWER_INFO[tower.type].icon, { className: compact ? "size-3" : "size-4" })}
+            <div className={`flex size-full items-center justify-center ${tower.type === "close" ? "text-cyan-200/90" : tower.type === "far" ? "text-violet-200/90" : tower.type === "splash" ? MAGE_ELEMENT_INFO[mageElementFor(tower)].text : "text-emerald-200/90"}`}>
+              {React.createElement(towerInfoFor(tower.type).icon, { className: compact ? "size-3" : "size-4" })}
               {!compact && (tower.upgradeLevel ?? 0) > 0 && <span className="absolute -bottom-0.5 text-[6px] font-mono text-cyan-300/80">L{tower.upgradeLevel}</span>}
             </div>
           )}
@@ -229,7 +247,8 @@ function TowerUpgradeModal({ tower, player, onUpgrade, onRemove, onClose, isBusy
   const locked = tower.upgradeBranch;
   const cost = UPGRADE_COSTS[level] ?? 200;
   const gold = goldOf(player);
-  const info = TOWER_INFO[tower.type];
+  const info = towerInfoFor(tower.type);
+  const mageElement = tower.type === "splash" ? mageElementFor(tower) : null;
   const refund = Math.floor((info.cost + UPGRADE_COSTS.slice(0, level).reduce((total, upgradeCost) => total + upgradeCost, 0)) * 0.75);
 
   return (
@@ -244,6 +263,7 @@ function TowerUpgradeModal({ tower, player, onUpgrade, onRemove, onClose, isBusy
           <button type="button" onClick={onClose} className="text-slate-500 hover:text-white text-lg leading-none">&times;</button>
         </div>
         <p className="text-[11px] text-slate-400 mb-1">{info.range}</p>
+        {mageElement && <p className={`mb-3 text-[10px] ${MAGE_ELEMENT_INFO[mageElement].text}`}>{MAGE_ELEMENT_INFO[mageElement].label} · {MAGE_ELEMENT_INFO[mageElement].counter}</p>}
         {locked && <p className="text-[10px] text-slate-500 mb-3">Locked to <span className="text-cyan-300">{locked}</span> branch</p>}
         {level >= 3 ? (
           <p className="text-[11px] text-amber-200/70">Maximum level reached.</p>
@@ -349,11 +369,12 @@ function Lobby({ room, currentUserId, onStart, onLeave, isBusy, error }: { room:
   </Card>;
 }
 
-function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, onCopy, onLeave, isBusy, error }: { room: Game; currentUserId?: string; onBuild: (type: TowerType, x: number, y: number) => void; onSend: (type: UnitType) => void; onUpgrade: (towerId: string, branch: "power" | "control") => void; onRemove: (towerId: string) => void; onCopy: () => void; onLeave: () => void; isBusy: boolean; error: string | null }) {
+function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, onCopy, onLeave, isBusy, error }: { room: Game; currentUserId?: string; onBuild: (type: TowerType, x: number, y: number, element?: MageElement) => void; onSend: (type: UnitType) => void; onUpgrade: (towerId: string, branch: "power" | "control") => void; onRemove: (towerId: string) => void; onCopy: () => void; onLeave: () => void; isBusy: boolean; error: string | null }) {
   const currentIndex = room.players.findIndex((p) => String(p.userId) === currentUserId);
   const player = room.players[currentIndex];
   const nextPlayer = room.players[(currentIndex + 1) % room.players.length];
   const [selectedTowerType, setSelectedTowerType] = useState<TowerType>("close");
+  const [selectedMageElement, setSelectedMageElement] = useState<MageElement>("fire");
   const [selectedTowerId, setSelectedTowerId] = useState<string | null>(null);
   const [unitTab, setUnitTab] = useState<"budget" | "mid" | "endgame">("budget");
 
@@ -402,6 +423,21 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
               </button>;
             })}
           </div>
+
+          {selectedTowerType === "splash" && <div className="rounded-lg border border-fuchsia-300/10 bg-fuchsia-300/[0.03] p-2">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[9px] uppercase tracking-wider text-slate-500">Mage element</span>
+              <span className="text-[8px] text-slate-600">Choose before placement</span>
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+              {(Object.entries(MAGE_ELEMENT_INFO) as [MageElement, typeof MAGE_ELEMENT_INFO[MageElement]][]).map(([element, info]) => {
+                const Icon = info.icon;
+                return <button key={element} type="button" onClick={() => setSelectedMageElement(element)} className={`flex flex-col items-center gap-1 rounded-md border px-1 py-1.5 text-[8px] transition ${selectedMageElement === element ? `${info.border} ${info.background} ${info.text}` : "border-white/5 text-slate-600 hover:border-white/15 hover:text-slate-300"}`} title={info.counter}>
+                  <Icon className="size-3" /><span>{info.label}</span>
+                </button>;
+              })}
+            </div>
+          </div>}
 
           {/* Unit shop with tabs */}
           <div className="border-t border-white/5 pt-3">
@@ -453,7 +489,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
 
         </CardHeader>
         <CardContent className="pt-3 space-y-3">
-          <GridLane player={player} selectedTowerType={selectedTowerType} onCellClick={(x, y) => onBuild(selectedTowerType, x, y)} onTowerClick={(id) => setSelectedTowerId(id === selectedTowerId ? null : id)} selectedTowerId={selectedTowerId} />
+          <GridLane player={player} selectedTowerType={selectedTowerType} selectedMageElement={selectedMageElement} onCellClick={(x, y) => onBuild(selectedTowerType, x, y, selectedTowerType === "splash" ? selectedMageElement : undefined)} onTowerClick={(id) => setSelectedTowerId(id === selectedTowerId ? null : id)} selectedTowerId={selectedTowerId} />
           <div className="grid grid-cols-3 gap-1.5 text-center">
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-white">{player.health}</p><p className="text-[8px] text-slate-600">integrity</p></div>
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-cyan-100">{myTowers.length}</p><p className="text-[8px] text-slate-600">walls</p></div>
@@ -590,7 +626,7 @@ export default function Dashboard() {
           <Lobby room={room!} currentUserId={currentUserId} onStart={() => run(() => startGame({ roomCode: roomCode! }))} onLeave={handleLeave} isBusy={isBusy} error={error} />
         ) : roomStatus === "playing" ? (
           <GameBoard room={room!} currentUserId={currentUserId}
-            onBuild={(t, x, y) => run(() => buildTower({ roomCode: roomCode!, towerType: t, x, y }))}
+            onBuild={(t, x, y, element) => run(() => buildTower({ roomCode: roomCode!, towerType: t, x, y, mageElement: element }))}
             onSend={(unitType) => run(() => sendUnit({ roomCode: roomCode!, unitType }))}
             onUpgrade={(towerId, branch) => run(() => upgradeTower({ roomCode: roomCode!, towerId, branch }))}
             onRemove={(towerId) => run(() => removeTower({ roomCode: roomCode!, towerId }))}

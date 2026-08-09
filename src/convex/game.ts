@@ -15,6 +15,8 @@ function flyingPathFor(y: number): GridPoint[] {
   return Array.from({ length: GRID_WIDTH }, (_, x) => ({ x, y }));
 }
 
+type MageElement = "fire" | "frost" | "storm" | "void";
+
 type UnitConfig = {
   label: string;
   cost: number;
@@ -48,11 +50,19 @@ const UNIT_CONFIG: Record<string, UnitConfig> = {
 
 } as const;
 
+const MAGE_ELEMENT_CONFIG: Record<MageElement, { label: string; damageMultiplier: number }> = {
+  fire: { label: "Fire", damageMultiplier: 1 },
+  frost: { label: "Frost", damageMultiplier: 0.8 },
+  storm: { label: "Storm", damageMultiplier: 1.15 },
+  void: { label: "Void", damageMultiplier: 0.95 },
+};
+
 const TOWER_CONFIG = {
   close: { label: "Pulse Tower", cost: 15, range: 1, damage: 10, splash: false, slow: false },
   far: { label: "Rail Tower", cost: 25, range: 3, damage: 4, splash: false, slow: false },
-  splash: { label: "Arc Tower", cost: 35, range: 2, damage: 6, splash: true, slow: false },
   slow: { label: "Snare Tower", cost: 30, range: 2, damage: 3, splash: false, slow: true },
+  // Stored as "splash" for compatibility with rooms created before this replacement.
+  splash: { label: "Mage Tower", cost: 45, range: 2, damage: 6, splash: false, slow: false },
 } as const;
 
 const UPGRADE_COSTS = [30, 80, 200] as const;
@@ -64,6 +74,7 @@ type TowerLike = {
   y?: number;
   position: number;
   type?: keyof typeof TOWER_CONFIG;
+  element?: MageElement;
   upgradeBranch?: "power" | "control";
   upgradeLevel?: number;
 };
@@ -71,6 +82,7 @@ type TowerLike = {
 type ProjectileLike = {
   id: string;
   towerType: keyof typeof TOWER_CONFIG;
+  element?: MageElement;
   targetUnitId: string;
   x: number;
   y: number;
@@ -157,6 +169,15 @@ function spawnPointFor(target: Player): GridPoint {
     if (!occupiedEntryRows.has(y)) return { x: 0, y };
   }
   return { x: 0, y: preferredY };
+}
+
+function mageDamageMultiplier(element: MageElement, unit: { type: string; flying?: boolean; resistance?: UnitConfig["resistance"] }) {
+  const unitConfig = UNIT_CONFIG[unit.type];
+  if (element === "fire" && unit.resistance === "splash") return 1.6;
+  if (element === "frost" && ((unitConfig?.speed ?? 0) >= 2 || unit.flying)) return 1.45;
+  if (element === "storm" && unit.flying) return 1.7;
+  if (element === "void" && (unit.resistance === "all" || unit.resistance === "physical")) return 1.8;
+  return 1;
 }
 
 function pointKey(point: GridPoint) {
@@ -367,6 +388,12 @@ export const buildTower = mutation({
     ),
     x: v.optional(v.number()),
     y: v.optional(v.number()),
+    mageElement: v.optional(v.union(
+      v.literal("fire"),
+      v.literal("frost"),
+      v.literal("storm"),
+      v.literal("void"),
+    )),
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
@@ -383,6 +410,7 @@ export const buildTower = mutation({
 
     const player = normalizePlayer(game.players[index]);
     const config = TOWER_CONFIG[args.towerType];
+    const mageElement = args.towerType === "splash" ? (args.mageElement ?? "fire") : undefined;
     if (player.gold < config.cost) throw new Error(`You need ${config.cost} gold for that tower.`);
     if (player.towers.some((tower) => pointKey(towerPoint(tower)) === `${x}:${y}`)) {
       throw new Error("That grid cell already contains a tower.");
@@ -398,6 +426,7 @@ export const buildTower = mutation({
       hp: 100,
       x,
       y,
+      element: mageElement,
       upgradeLevel: 0,
     };
     const proposedTowers = [...player.towers, tower];
@@ -702,11 +731,15 @@ export const tick = mutation({
 
         // Handle resistances
         let effectiveDamage = projectile.damage;
-        if (targetUnit.resistance === "all" || targetUnit.resistance === "physical") {
+        const ignoresResistance = projectile.towerType === "splash" && projectile.element === "void";
+        if (!ignoresResistance && (targetUnit.resistance === "all" || targetUnit.resistance === "physical")) {
           effectiveDamage *= 0.5;
         }
         if (projectile.splash && targetUnit.resistance === "splash") {
           effectiveDamage *= 0.3;
+        }
+        if (projectile.towerType === "splash" && projectile.element) {
+          effectiveDamage *= mageDamageMultiplier(projectile.element, targetUnit);
         }
 
         if (projectile.splash) {
@@ -715,8 +748,12 @@ export const tick = mutation({
             const location = unitPoint(unit);
             if (Math.abs(location.x - impactPoint.x) + Math.abs(location.y - impactPoint.y) <= 1) {
               let dmg = projectile.damage;
-              if (unit.resistance === "all") dmg *= 0.5;
-              if (unit.resistance === "splash") dmg *= 0.3;
+              if (projectile.element === "void") {
+                dmg *= mageDamageMultiplier(projectile.element, unit);
+              } else {
+                if (unit.resistance === "all") dmg *= 0.5;
+                if (unit.resistance === "splash") dmg *= 0.3;
+              }
               movedUnits[unitIndex] = { ...unit, hp: unit.hp - dmg };
             }
           });
@@ -728,8 +765,10 @@ export const tick = mutation({
       for (const tower of currentTowers) {
         const config = TOWER_CONFIG[tower.type];
         const level = tower.upgradeLevel ?? 0;
+        const mageElement = tower.type === "splash" ? (tower.element ?? "fire") : undefined;
+        const elementDamage = mageElement ? MAGE_ELEMENT_CONFIG[mageElement].damageMultiplier : 1;
         const range = config.range + (tower.upgradeBranch === "control" ? level : 0);
-        const damage = config.damage * (1 + (tower.upgradeBranch === "power" ? level * 0.2 : 0));
+        const damage = config.damage * elementDamage * (1 + (tower.upgradeBranch === "power" ? level * 0.2 : 0));
         const towerLocation = towerPoint(tower);
         const inRange = movedUnits
           .map((unit, unitIndex) => ({ unit, unitIndex }))
@@ -742,8 +781,10 @@ export const tick = mutation({
         for (const { unit, unitIndex } of targets) {
           const location = unitPoint(unit);
           // Slow effect is weaker now
-          const slowFactor = config.slow && tower.upgradeBranch === "control" ? 0.75 - level * 0.05 : 1;
-          if (unit.resistance !== "slow" && unit.resistance !== "all") {
+          const slowFactor = mageElement === "frost"
+            ? 0.7 - level * 0.04
+            : config.slow && tower.upgradeBranch === "control" ? 0.75 - level * 0.05 : 1;
+          if (slowFactor < 1 && unit.resistance !== "slow" && unit.resistance !== "all") {
             movedUnits[unitIndex] = {
               ...movedUnits[unitIndex],
               pathProgress: (movedUnits[unitIndex].pathProgress ?? 0) * slowFactor,
@@ -752,6 +793,7 @@ export const tick = mutation({
           nextProjectiles.push({
             id: createId("projectile"),
             towerType: tower.type,
+            element: mageElement,
             targetUnitId: unit.id,
             x: towerLocation.x,
             y: towerLocation.y,

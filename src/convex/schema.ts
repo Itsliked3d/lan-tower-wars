@@ -39,6 +39,13 @@ const towerTypeValidator = v.union(
   v.literal("slow"),
 );
 
+const mageElementValidator = v.union(
+  v.literal("fire"),
+  v.literal("frost"),
+  v.literal("storm"),
+  v.literal("void"),
+);
+
 const upgradeBranchValidator = v.union(
   v.literal("power"),
   v.literal("control"),
@@ -72,6 +79,7 @@ const towerValidator = v.object({
   hp: v.number(),
   x: v.optional(v.number()),
   y: v.optional(v.number()),
+  element: v.optional(mageElementValidator),
   upgradeBranch: v.optional(upgradeBranchValidator),
   upgradeLevel: v.optional(v.number()),
 });
@@ -79,6 +87,7 @@ const towerValidator = v.object({
 const projectileValidator = v.object({
   id: v.string(),
   towerType: towerTypeValidator,
+  element: v.optional(mageElementValidator),
   targetUnitId: v.string(),
   x: v.number(),
   y: v.number(),
