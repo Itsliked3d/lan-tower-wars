@@ -1,4 +1,5 @@
 import { api } from "@/convex/_generated/api";
+
 import type { Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -154,6 +155,7 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
   const towers = towersOf(player);
   const units = unitsOf(player);
   const projectiles = projectilesOf(player);
+  const [isExpanded, setIsExpanded] = useState(false);
   const selectedTower = selectedTowerId ? towers.find((tower) => tower.id === selectedTowerId) : null;
   const selectedTowerPoint = selectedTower ? towerPoint(selectedTower) : null;
   const selectedRange = selectedTower ? TOWER_INFO[selectedTower.type].rangeCells + (selectedTower.upgradeBranch === "control" ? (selectedTower.upgradeLevel ?? 0) : 0) : 0;
@@ -163,7 +165,7 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
   const route = findVisualPath(player.towers);
   const towerMap = new Map(towers.map((tower) => [pointKey(towerPoint(tower)), tower]));
 
-  return <div onClick={onLaneClick} className={`relative aspect-[18/10] overflow-hidden rounded-lg border border-white/[0.06] bg-[#040810] ${onLaneClick ? "cursor-pointer transition hover:border-violet-300/30 hover:shadow-[0_0_20px_rgba(167,139,250,0.08)]" : ""}`}>
+  return <div onClick={(event) => { if (onLaneClick) onLaneClick(); if (compact && !onLaneClick) { event.stopPropagation(); setIsExpanded(true); } }} className={`relative aspect-[18/10] overflow-hidden rounded-lg border border-white/[0.06] bg-[#040810] ${onLaneClick || compact ? "cursor-pointer transition hover:border-violet-300/30 hover:shadow-[0_0_20px_rgba(167,139,250,0.08)]" : ""}`}>
     <div className="pointer-events-none absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle, rgba(148,163,184,0.8) 1px, transparent 1px)", backgroundSize: `${100 / GRID_WIDTH}% ${100 / GRID_HEIGHT}%` }} />
 
     <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${GRID_WIDTH}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${GRID_HEIGHT}, minmax(0, 1fr))` }}>
@@ -304,6 +306,17 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
 
     <ProjectileLayer projectiles={projectiles} />
 
+    {isExpanded && compact && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#03050b]/85 p-4 backdrop-blur-sm" onClick={(event) => { event.stopPropagation(); setIsExpanded(false); }}>
+        <div className="w-full max-w-5xl rounded-2xl border border-violet-300/20 bg-[#0b1120] p-3 shadow-[0_0_60px_12px_rgba(139,92,246,0.16)] sm:p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="min-w-0"><p className="font-mono text-[9px] uppercase tracking-[0.2em] text-violet-300/70">SPECTATING</p><p className="truncate text-base font-semibold text-white">{player.name}</p></div>
+            <button type="button" onClick={() => setIsExpanded(false)} className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-semibold text-slate-400 transition hover:border-white/20 hover:text-white">Close</button>
+          </div>
+          <GridLane player={player} selectedTowerType={null} />
+        </div>
+      </div>
+    )}
   </div>;
 }
 

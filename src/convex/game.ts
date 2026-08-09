@@ -74,11 +74,11 @@ function incomeForUnit(config: UnitConfig) {
   return Math.max(1, Math.floor(config.cost * INCOME_RATE_BY_TIER[config.tier]));
 }
 
-const MAGE_ELEMENT_CONFIG: Record<MageElement, { label: string; damageMultiplier: number }> = {
-  fire: { label: "Fire", damageMultiplier: 1 },
-  frost: { label: "Frost", damageMultiplier: 0.8 },
-  storm: { label: "Storm", damageMultiplier: 1.15 },
-  void: { label: "Void", damageMultiplier: 0.95 },
+const MAGE_ELEMENT_CONFIG: Record<MageElement, { label: string; damageMultiplier: number; effect: "burn" | "slow" | "chain" | "void" }> = {
+  fire: { label: "Fire", damageMultiplier: 1, effect: "burn" },
+  frost: { label: "Frost", damageMultiplier: 0.8, effect: "slow" },
+  storm: { label: "Storm", damageMultiplier: 1.15, effect: "chain" },
+  void: { label: "Void", damageMultiplier: 0.95, effect: "void" },
 };
 
 const TOWER_CONFIG = {
@@ -988,7 +988,8 @@ export const tick = mutation({
         ) => {
           const unit = movedUnits[unitIndex];
           if (!unit || unit.hp <= 0) return;
-          const ignoresResistance = element === "void" || (unit.armorBrokenUntil ?? 0) > now;
+          const effect = element ? MAGE_ELEMENT_CONFIG[element].effect : undefined;
+          const ignoresResistance = effect === "void" || (unit.armorBrokenUntil ?? 0) > now;
           let effectiveDamage = rawDamage;
           if (!ignoresResistance && (unit.resistance === "all" || unit.resistance === "physical")) {
             effectiveDamage *= 0.5;
@@ -1001,19 +1002,19 @@ export const tick = mutation({
           const nextUnit = {
             ...unit,
             hp: unit.hp - effectiveDamage,
-            burnDamage: element === "fire"
+            burnDamage: effect === "burn"
               ? Math.max(unit.burnDamage ?? 0, rawDamage * 0.25)
               : unit.burnDamage,
-            burnUntil: element === "fire" ? Math.max(unit.burnUntil ?? 0, now + 3_500) : unit.burnUntil,
-            slowStacks: element === "frost" && unit.resistance !== "slow" && unit.resistance !== "all"
+            burnUntil: effect === "burn" ? Math.max(unit.burnUntil ?? 0, now + 3_500) : unit.burnUntil,
+            slowStacks: effect === "slow" && unit.resistance !== "slow" && unit.resistance !== "all"
               ? Math.min(3, (unit.slowUntil ?? 0) > now ? (unit.slowStacks ?? 0) + 1 : 1)
               : appliesSlow && unit.resistance !== "slow" && unit.resistance !== "all"
                 ? Math.min(3, (unit.slowUntil ?? 0) > now ? (unit.slowStacks ?? 0) + 1 : 1)
                 : unit.slowStacks,
-            slowUntil: (element === "frost" || appliesSlow) && unit.resistance !== "slow" && unit.resistance !== "all"
+            slowUntil: (effect === "slow" || appliesSlow) && unit.resistance !== "slow" && unit.resistance !== "all"
               ? now + 4_000
               : unit.slowUntil,
-            armorBrokenUntil: element === "void" ? now + 5_000 : unit.armorBrokenUntil,
+            armorBrokenUntil: effect === "void" ? now + 5_000 : unit.armorBrokenUntil,
           };
           movedUnits[unitIndex] = nextUnit;
         };
@@ -1038,7 +1039,7 @@ export const tick = mutation({
 
         // Storm jumps to up to two nearby units after the primary impact,
         // including Mage splash impacts.
-        if (projectile.element === "storm") {
+        if (projectile.element && MAGE_ELEMENT_CONFIG[projectile.element].effect === "chain") {
           const primaryPoint = unitPoint(movedUnits[targetIndex]);
           movedUnits
             .map((unit, unitIndex) => ({ unit, unitIndex }))
