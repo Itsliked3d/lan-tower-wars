@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useMutation, useQuery } from "convex/react";
-import { Bird, Castle, Coins, Crosshair, Crown, Flame, Footprints, Ghost, Hammer, HelpCircle, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, TrendingUp, Turtle, Users, Zap } from "lucide-react";
+import { Bird, Castle, Coins, Crosshair, Crown, Flame, Footprints, Ghost, Hammer, HelpCircle, LogOut, Radar, Radio, Ruler, Shield, Skull, Sparkles, Swords, Target, Trash2, TrendingUp, Turtle, Users, Zap } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -224,12 +224,13 @@ function GridLane({ player, compact = false, selectedTowerType, onCellClick, onT
 }
 
 // ── Tower upgrade modal ──
-function TowerUpgradeModal({ tower, player, onUpgrade, onClose, isBusy }: { tower: NonNullable<Player["towers"]>[number]; player: Player; onUpgrade: (branch: "power" | "control") => void; onClose: () => void; isBusy: boolean }) {
+function TowerUpgradeModal({ tower, player, onUpgrade, onRemove, onClose, isBusy }: { tower: NonNullable<Player["towers"]>[number]; player: Player; onUpgrade: (branch: "power" | "control") => void; onRemove: () => void; onClose: () => void; isBusy: boolean }) {
   const level = tower.upgradeLevel ?? 0;
   const locked = tower.upgradeBranch;
   const cost = UPGRADE_COSTS[level] ?? 200;
   const gold = goldOf(player);
   const info = TOWER_INFO[tower.type];
+  const refund = Math.floor((info.cost + UPGRADE_COSTS.slice(0, level).reduce((total, upgradeCost) => total + upgradeCost, 0)) * 0.75);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -263,6 +264,14 @@ function TowerUpgradeModal({ tower, player, onUpgrade, onClose, isBusy }: { towe
             </div>
           </>
         )}
+        <div className="mt-4 border-t border-white/5 pt-3">
+          <button type="button" onClick={onRemove} disabled={isBusy}
+            className="flex w-full items-center justify-between rounded-lg border border-rose-300/15 bg-rose-300/[0.04] px-3 py-2 text-left text-[10px] text-rose-200/80 transition hover:border-rose-300/40 hover:bg-rose-300/[0.08] disabled:cursor-not-allowed disabled:opacity-30">
+            <span className="flex items-center gap-1.5"><Trash2 className="size-3" />Remove tower</span>
+            <span className="font-mono text-emerald-200/80">+{refund}g refund</span>
+          </button>
+          <p className="mt-1.5 text-[9px] text-slate-600">Refunds 75% of this tower's build and upgrade cost.</p>
+        </div>
       </div>
     </div>
   );
@@ -340,7 +349,7 @@ function Lobby({ room, currentUserId, onStart, onLeave, isBusy, error }: { room:
   </Card>;
 }
 
-function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, onLeave, isBusy, error }: { room: Game; currentUserId?: string; onBuild: (type: TowerType, x: number, y: number) => void; onSend: (type: UnitType) => void; onUpgrade: (towerId: string, branch: "power" | "control") => void; onCopy: () => void; onLeave: () => void; isBusy: boolean; error: string | null }) {
+function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, onCopy, onLeave, isBusy, error }: { room: Game; currentUserId?: string; onBuild: (type: TowerType, x: number, y: number) => void; onSend: (type: UnitType) => void; onUpgrade: (towerId: string, branch: "power" | "control") => void; onRemove: (towerId: string) => void; onCopy: () => void; onLeave: () => void; isBusy: boolean; error: string | null }) {
   const currentIndex = room.players.findIndex((p) => String(p.userId) === currentUserId);
   const player = room.players[currentIndex];
   const nextPlayer = room.players[(currentIndex + 1) % room.players.length];
@@ -485,7 +494,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, on
     {error && <p className="rounded-lg border border-rose-300/15 bg-rose-300/[0.06] px-3 py-2 text-[11px] text-rose-200">{error}</p>}
 
     {/* Tower upgrade modal */}
-    {selectedTower && <TowerUpgradeModal tower={selectedTower} player={player} onUpgrade={(branch) => { onUpgrade(selectedTower.id, branch); setSelectedTowerId(null); }} onClose={() => setSelectedTowerId(null)} isBusy={isBusy} />}
+    {selectedTower && <TowerUpgradeModal tower={selectedTower} player={player} onUpgrade={(branch) => { onUpgrade(selectedTower.id, branch); setSelectedTowerId(null); }} onRemove={() => { onRemove(selectedTower.id); setSelectedTowerId(null); }} onClose={() => setSelectedTowerId(null)} isBusy={isBusy} />}
   </div>;
 }
 
@@ -505,6 +514,7 @@ export default function Dashboard() {
   const buildTower = useMutation(api.game.buildTower);
   const sendUnit = useMutation(api.game.sendUnit);
   const upgradeTower = useMutation(api.game.upgradeTower);
+  const removeTower = useMutation(api.game.removeTower);
   const tick = useMutation(api.game.tick);
   const currentUser = useQuery(api.users.currentUser);
   const currentUserId = currentUser?._id ? String(currentUser._id) : undefined;
@@ -583,6 +593,7 @@ export default function Dashboard() {
             onBuild={(t, x, y) => run(() => buildTower({ roomCode: roomCode!, towerType: t, x, y }))}
             onSend={(unitType) => run(() => sendUnit({ roomCode: roomCode!, unitType }))}
             onUpgrade={(towerId, branch) => run(() => upgradeTower({ roomCode: roomCode!, towerId, branch }))}
+            onRemove={(towerId) => run(() => removeTower({ roomCode: roomCode!, towerId }))}
             onCopy={handleCopy} onLeave={handleLeave} isBusy={isBusy} error={error} />
         ) : (
           <Card className="mx-auto max-w-md border-rose-300/15 bg-rose-300/[0.04] text-center">
