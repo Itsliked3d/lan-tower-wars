@@ -18,6 +18,7 @@ export type Role = Infer<typeof roleValidator>;
 const unitTypeValidator = v.union(
   v.literal("soldier"),
   v.literal("scout"),
+  v.literal("abuse_control"),
 );
 
 const towerTypeValidator = v.union(
@@ -25,18 +26,32 @@ const towerTypeValidator = v.union(
   v.literal("far"),
 );
 
+const gridPointValidator = v.object({
+  x: v.number(),
+  y: v.number(),
+});
+
 const laneUnitValidator = v.object({
   id: v.string(),
   type: unitTypeValidator,
+  // Legacy horizontal position is kept for old rooms and simple telemetry.
   position: v.number(),
   hp: v.number(),
+  x: v.optional(v.number()),
+  y: v.optional(v.number()),
+  path: v.optional(v.array(gridPointValidator)),
+  pathIndex: v.optional(v.number()),
+  pathProgress: v.optional(v.number()),
 });
 
 const towerValidator = v.object({
   id: v.string(),
   type: towerTypeValidator,
+  // Legacy horizontal position is kept for old rooms.
   position: v.number(),
   hp: v.number(),
+  x: v.optional(v.number()),
+  y: v.optional(v.number()),
 });
 
 const playerValidator = v.object({
@@ -44,7 +59,6 @@ const playerValidator = v.object({
   name: v.string(),
   color: v.string(),
   health: v.number(),
-  // Legacy pass-along counters remain so existing rooms can migrate safely.
   units: v.number(),
   incoming: v.number(),
   shield: v.number(),
@@ -81,8 +95,8 @@ const schema = defineSchema(
       players: v.array(playerValidator),
       lastAction: v.string(),
       updatedAt: v.number(),
-      // The simulation advances lazily when a connected client calls tick.
       lastTick: v.optional(v.number()),
+      lastAbuseControlSpawn: v.optional(v.number()),
     }).index("by_room_code", ["roomCode"]),
   },
   { schemaValidation: false },
