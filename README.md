@@ -1,4 +1,4 @@
-###AI-designed Line Tower Wars Inspired mini game
+### AI-designed Line Tower Wars Inspired mini game
 
 ## Overview
 
