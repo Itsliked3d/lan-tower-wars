@@ -418,6 +418,8 @@ export const buildTower = mutation({
     }
 
     const player = normalizePlayer(game.players[index]);
+    if (player.health <= 0) throw new Error("You have been eliminated and can only spectate.");
+    if (game.players.filter((candidate) => candidate.health > 0).length <= 1) throw new Error("The match is over. You can only spectate.");
     const config = TOWER_CONFIG[args.towerType];
     const mageElement = args.towerType === "splash" ? (args.mageElement ?? "fire") : undefined;
     if (player.gold < config.cost) throw new Error(`You need ${config.cost} gold for that tower.`);
@@ -473,6 +475,8 @@ export const removeTower = mutation({
     if (index < 0) throw new Error("You are not in this room.");
 
     const player = normalizePlayer(game.players[index]);
+    if (player.health <= 0) throw new Error("You have been eliminated and can only spectate.");
+    if (game.players.filter((candidate) => candidate.health > 0).length <= 1) throw new Error("The match is over. You can only spectate.");
     const tower = player.towers.find((current) => current.id === args.towerId);
     if (!tower) throw new Error("That tower is no longer on your lane.");
 
@@ -509,6 +513,8 @@ export const upgradeTower = mutation({
     if (index < 0) throw new Error("You are not in this room.");
 
     const player = normalizePlayer(game.players[index]);
+    if (player.health <= 0) throw new Error("You have been eliminated and can only spectate.");
+    if (game.players.filter((candidate) => candidate.health > 0).length <= 1) throw new Error("The match is over. You can only spectate.");
     const towerIndex = player.towers.findIndex((tower) => tower.id === args.towerId);
     if (towerIndex < 0) throw new Error("That tower is no longer on your lane.");
     const tower = player.towers[towerIndex];
@@ -567,8 +573,13 @@ export const sendUnit = mutation({
     const index = game.players.findIndex((player) => player.userId === userId);
     if (index < 0) throw new Error("You are not in this room.");
 
-    const targetIndex = (index + 1) % game.players.length;
     const player = normalizePlayer(game.players[index]);
+    if (player.health <= 0) throw new Error("You have been eliminated and can only spectate.");
+    if (game.players.filter((candidate) => candidate.health > 0).length <= 1) throw new Error("The match is over. You can only spectate.");
+    const targetIndex = Array.from({ length: game.players.length - 1 }, (_, offset) =>
+      (index + offset + 1) % game.players.length,
+    ).find((candidateIndex) => game.players[candidateIndex].health > 0);
+    if (targetIndex === undefined) throw new Error("No opposing player remains.");
     const target = normalizePlayer(game.players[targetIndex]);
     const config = UNIT_CONFIG[args.unitType];
     if (!config) throw new Error("Unknown unit type.");
@@ -629,6 +640,7 @@ export const tick = mutation({
   handler: async (ctx, args) => {
     const game = await getGame(ctx, args.roomCode);
     if (game.status !== "playing") return;
+    if (game.players.filter((player) => player.health > 0).length <= 1) return;
 
     const now = Date.now();
     const previousTick = game.lastTick ?? now;
@@ -654,7 +666,7 @@ export const tick = mutation({
       let botIncome = state.income;
       let botSent = state.sent;
 
-      if (isPractice && isBot) {
+      if (isPractice && isBot && state.health > 0) {
         // Bot builds a tower every ~15s if it has gold
         if (Math.random() < 0.15 && botGold >= TOWER_CONFIG.close.cost) {
           const botX = Math.floor(Math.random() * (GRID_WIDTH - 2)) + 1;
@@ -852,13 +864,16 @@ export const tick = mutation({
       return p;
     });
 
-    const ended = finalPlayers.some((p) => p.health <= 0);
+    const survivors = finalPlayers.filter((p) => p.health > 0);
+    const matchComplete = survivors.length <= 1;
+    const winnerMessage = survivors[0]
+      ? `${survivors[0].name} is the last player standing.`
+      : "No player survived the battle.";
     await ctx.db.patch(game._id, {
       players: finalPlayers,
       lastTick: now,
-
-      status: ended ? "ended" : "playing",
-      lastAction: leakMessage || game.lastAction,
+      status: "playing",
+      lastAction: matchComplete ? winnerMessage : leakMessage || game.lastAction,
       updatedAt: now,
     });
   },

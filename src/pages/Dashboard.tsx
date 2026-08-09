@@ -462,7 +462,10 @@ function Lobby({ room, currentUserId, onStart, onLeave, isBusy, error }: { room:
 function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, onCopy, onLeave, isBusy, error }: { room: Game; currentUserId?: string; onBuild: (type: TowerType, x: number, y: number, element?: MageElement) => void; onSend: (type: UnitType) => void; onUpgrade: (towerId: string, branch: "power" | "control") => void; onRemove: (towerId: string) => void; onCopy: () => void; onLeave: () => void; isBusy: boolean; error: string | null }) {
   const currentIndex = room.players.findIndex((p) => String(p.userId) === currentUserId);
   const player = room.players[currentIndex];
-  const nextPlayer = room.players[(currentIndex + 1) % room.players.length];
+  const nextPlayer = room.players
+    .slice(1)
+    .map((_, offset) => room.players[(currentIndex + offset + 1) % room.players.length])
+    .find((candidate) => candidate.health > 0);
   const [selectedTowerType, setSelectedTowerType] = useState<TowerType>("close");
   const [selectedMageElement, setSelectedMageElement] = useState<MageElement>("fire");
   const [selectedTowerId, setSelectedTowerId] = useState<string | null>(null);
@@ -470,6 +473,10 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
 
   if (!player) return null;
   const gold = goldOf(player);
+  const livingPlayers = room.players.filter((candidate) => candidate.health > 0);
+  const matchComplete = livingPlayers.length <= 1;
+  const winner = livingPlayers[0];
+  const canAct = player.health > 0 && !matchComplete;
   const myTowers = towersOf(player);
   const selectedTower = selectedTowerId ? myTowers.find((t) => t.id === selectedTowerId) : null;
 
@@ -491,6 +498,9 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
       </div>
     </div>
 
+    {matchComplete && <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300/25 bg-gradient-to-r from-amber-300/[0.08] to-cyan-300/[0.05] px-4 py-3 text-[10px] text-amber-100/80"><span className="flex items-center gap-2"><Crown className="size-4 text-amber-300" /><strong className="font-semibold text-amber-100">{winner && String(winner.userId) === currentUserId ? "Victory" : "Match complete"}</strong><span>{winner ? `${winner.name} is the last player standing.` : "No player survived."}</span></span><span className="font-mono text-[9px] uppercase tracking-[0.15em] text-amber-300/60">Spectate</span></div>}
+    {!matchComplete && !canAct && <div className="flex items-center gap-2 rounded-xl border border-rose-300/15 bg-rose-300/[0.04] px-4 py-2.5 text-[10px] text-rose-100/70"><Radar className="size-3.5 text-rose-300/80" />Spectating — the last remaining player wins the match.</div>}
+
     {/* Economy — always visible, full width */}
     <EconomyStrip player={player} />
 
@@ -500,6 +510,8 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
       <Card className="border-white/[0.07] bg-[#0b1120]">
         <CardHeader className="pb-3"><div className="flex items-center gap-2"><Hammer className="size-3.5 text-cyan-200" /><CardTitle className="text-sm text-white">Build</CardTitle></div></CardHeader>
         <CardContent className="space-y-4">
+          {!canAct && <div className="flex items-start gap-2 rounded-xl border border-rose-300/20 bg-rose-300/[0.06] px-3 py-3 text-[10px] text-rose-100/80"><Radar className="mt-0.5 size-3.5 shrink-0 text-rose-300" /><span><strong className="font-semibold text-rose-100">Spectator mode.</strong> Your lane has been eliminated. Watch the remaining players fight.</span></div>}
+          <div className={canAct ? "" : "pointer-events-none opacity-40"}>
           {/* Tower grid */}
           <div className="grid grid-cols-2 gap-1.5">
             {(Object.entries(TOWER_INFO) as [TowerType, typeof TOWER_INFO[TowerType]][]).map(([type, info]) => {
@@ -566,6 +578,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
           <div className="flex items-start gap-1.5 rounded-lg border border-amber-300/10 bg-amber-300/[0.03] p-2 text-[9px] text-amber-100/60">
             <Coins className="mt-0.5 size-3 shrink-0 text-amber-300" />Income is paid in one burst every 15 seconds. Expensive units pay more.
           </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -579,7 +592,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
 
         </CardHeader>
         <CardContent className="pt-3 space-y-3">
-          <GridLane player={player} selectedTowerType={selectedTowerType} selectedMageElement={selectedMageElement} onCellClick={(x, y) => onBuild(selectedTowerType, x, y, selectedTowerType === "splash" ? selectedMageElement : undefined)} onTowerClick={(id) => setSelectedTowerId(id === selectedTowerId ? null : id)} selectedTowerId={selectedTowerId} />
+          <GridLane player={player} selectedTowerType={selectedTowerType} selectedMageElement={selectedMageElement} onCellClick={canAct ? (x, y) => onBuild(selectedTowerType, x, y, selectedTowerType === "splash" ? selectedMageElement : undefined) : undefined} onTowerClick={canAct ? (id) => setSelectedTowerId(id === selectedTowerId ? null : id) : undefined} selectedTowerId={selectedTowerId} />
           <div className="grid grid-cols-3 gap-1.5 text-center">
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-white">{player.health}</p><p className="text-[8px] text-slate-600">integrity</p></div>
             <div className="rounded-lg border border-white/5 bg-white/[0.01] p-2"><p className="font-mono text-sm text-cyan-100">{myTowers.length}</p><p className="text-[8px] text-slate-600">walls</p></div>
@@ -596,6 +609,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
             <div key={String(seat.userId)}>
               <div className="mb-1 flex items-center justify-between gap-1 text-[9px]">
                 <span className={i === currentIndex ? "font-semibold text-cyan-100" : "text-slate-400"}>{seat.name}</span>
+                {seat.health <= 0 && <span className="rounded border border-rose-300/15 bg-rose-300/[0.05] px-1 py-px font-mono text-[7px] text-rose-300/70">OUT</span>}
                 <span className="flex items-center gap-1.5">
                   <span className="inline-flex items-center gap-0.5 rounded border border-emerald-300/15 bg-emerald-300/[0.05] px-1 py-px font-mono text-[8px] text-emerald-300/80" title="Income per 15-second payout"><TrendingUp className="size-2" />+{incomeOf(seat)}/15s</span>
                   <span className="font-mono text-slate-600">{seat.health}%</span>
@@ -620,7 +634,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
     {error && <p className="rounded-lg border border-rose-300/15 bg-rose-300/[0.06] px-3 py-2 text-[11px] text-rose-200">{error}</p>}
 
     {/* Tower upgrade modal */}
-    {selectedTower && <TowerUpgradeModal tower={selectedTower} player={player} onUpgrade={(branch) => { onUpgrade(selectedTower.id, branch); setSelectedTowerId(null); }} onRemove={() => { onRemove(selectedTower.id); setSelectedTowerId(null); }} onClose={() => setSelectedTowerId(null)} isBusy={isBusy} />}
+    {selectedTower && canAct && <TowerUpgradeModal tower={selectedTower} player={player} onUpgrade={(branch) => { onUpgrade(selectedTower.id, branch); setSelectedTowerId(null); }} onRemove={() => { onRemove(selectedTower.id); setSelectedTowerId(null); }} onClose={() => setSelectedTowerId(null)} isBusy={isBusy} />}
   </div>;
 }
 
