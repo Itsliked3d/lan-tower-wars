@@ -7,7 +7,6 @@ import { useMutation, useQuery } from "convex/react";
 import { Bird, Castle, Coins, Crosshair, Crown, Flame, Footprints, Ghost, Hammer, HelpCircle, LogOut, Radar, Radio, Ruler, Shield, Skull, Snowflake, Sparkles, Swords, Target, Trash2, TrendingUp, Turtle, Users, Wand, Zap } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 type Game = Doc<"games">;
 type Player = Game["players"][number];
@@ -224,31 +223,31 @@ function GridLane({ player, compact = false, selectedTowerType, selectedMageElem
           {tower && tower.type === "close" && (
             <div className="flex size-full items-center justify-center tower-pulse">
               <div className="flex size-[60%] items-center justify-center rounded-full border border-cyan-300/25 bg-cyan-300/[0.08]">
-                <Target className={compact ? "size-2.5 text-cyan-300/90 drop-shadow-[0_0_3px_rgba(34,211,238,0.6)]" : "size-3.5 text-cyan-300/90 drop-shadow-[0_0_3px_rgba(34,211,238,0.6)]"} />
+                <Target className={`${compact ? "size-2.5" : "size-3.5"} text-cyan-300/90 drop-shadow-[0_0_3px_rgba(34,211,238,0.6)]`} />
               </div>
             </div>
           )}
 
           {tower && tower.type === "far" && (
             <div className="flex size-full items-center justify-center tower-rail">
-              <div className={compact ? "size-[50%] rotate-45 items-center justify-center border border-violet-300/20 bg-violet-300/[0.06]" : "size-[55%] rotate-45 items-center justify-center border border-violet-300/20 bg-violet-300/[0.06]"}>
-                <Radar className={compact ? "size-2.5 -rotate-45 text-violet-300/90 drop-shadow-[0_0_3px_rgba(167,139,250,0.5)]" : "size-3.5 -rotate-45 text-violet-300/90 drop-shadow-[0_0_3px_rgba(167,139,250,0.5)]"} />
+              <div className={`flex ${compact ? "size-[50%]" : "size-[55%]"} rotate-45 items-center justify-center border border-violet-300/20 bg-violet-300/[0.06]">
+                <Radar className={`${compact ? "size-2.5" : "size-3.5"} -rotate-45 text-violet-300/90 drop-shadow-[0_0_3px_rgba(167,139,250,0.5)]`} />
               </div>
             </div>
           )}
 
           {tower && tower.type === "slow" && (
             <div className="flex size-full items-center justify-center tower-snare">
-              <div className={compact ? "size-[55%] items-center justify-center rounded border border-emerald-300/20 bg-emerald-300/[0.05]" : "size-[60%] items-center justify-center rounded border border-emerald-300/20 bg-emerald-300/[0.05]"} style={{ clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)" }}>
-                <Ruler className={compact ? "size-2.5 text-emerald-300/90 drop-shadow-[0_0_3px_rgba(110,231,183,0.5)]" : "size-3 text-emerald-300/90 drop-shadow-[0_0_3px_rgba(110,231,183,0.5)]"} />
+              <div className={`flex ${compact ? "size-[55%]" : "size-[60%]"} items-center justify-center rounded border border-emerald-300/20 bg-emerald-300/[0.05]`} style={{ clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)" }}>
+                <Ruler className={`${compact ? "size-2.5" : "size-3"} text-emerald-300/90 drop-shadow-[0_0_3px_rgba(110,231,183,0.5)]`} />
               </div>
             </div>
           )}
 
           {tower && tower.type === "splash" && (
             <div className="flex size-full items-center justify-center tower-mage">
-              <div className={cn(compact ? "size-[58%]" : "size-[62%]", "items-center justify-center rounded-lg border", MAGE_ELEMENT_INFO[mageElementFor(tower)].border, MAGE_ELEMENT_INFO[mageElementFor(tower)].background)} style={{ color: "currentColor" }}>
-                {React.createElement(MAGE_ELEMENT_INFO[mageElementFor(tower)].icon, { className: cn(compact ? "size-2.5" : "size-3.5", MAGE_ELEMENT_INFO[mageElementFor(tower)].text, "drop-shadow-[0_0_4px_currentColor]") })}
+              <div className={`flex ${compact ? "size-[58%]" : "size-[62%]"} items-center justify-center rounded-lg border ${MAGE_ELEMENT_INFO[mageElementFor(tower)].border} ${MAGE_ELEMENT_INFO[mageElementFor(tower)].background}`} style={{ color: "currentColor" }}>
+                {React.createElement(MAGE_ELEMENT_INFO[mageElementFor(tower)].icon, { className: `${compact ? "size-2.5" : "size-3.5"} ${MAGE_ELEMENT_INFO[mageElementFor(tower)].text} drop-shadow-[0_0_4px_currentColor]` })}
               </div>
             </div>
           )}
