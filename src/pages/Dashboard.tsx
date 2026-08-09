@@ -279,7 +279,7 @@ function PlayerSeat({ player, index, isCurrent, isHost }: { player: Player; inde
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center gap-2">
         <div className="flex size-7 items-center justify-center rounded-lg text-xs font-semibold" style={{ color: player.color, backgroundColor: `${player.color}18` }}>{index + 1}</div>
-        <div><div className="flex items-center gap-1 text-xs font-semibold text-white">{player.name}{isCurrent && <span className="rounded bg-cyan-300/15 px-1 text-[8px] text-cyan-200">YOU</span>}{isHost && <Crown className="size-3 text-amber-300" />}</div></div>
+        <div><div className="flex items-center gap-1 text-xs font-semibold text-white">{player.name}{isCurrent && <span className="rounded bg-cyan-300/15 px-1 text-[8px] text-cyan-200">YOU</span>}{isHost && <Crown className="size-3 text-amber-300" />}<span className="ml-1 inline-flex items-center gap-0.5 rounded border border-emerald-300/15 bg-emerald-300/[0.05] px-1 font-mono text-[8px] text-emerald-300/80" title="Income per tick"><TrendingUp className="size-2" />+{incomeOf(player)}</span></div></div>
       </div>
       <div className="text-right"><span className="font-mono text-xs text-white">{player.health}</span><span className="text-[8px] text-slate-600">%</span></div>
     </div>
@@ -465,9 +465,12 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, on
         <CardContent className="space-y-3">
           {room.players.map((seat, i) => (
             <div key={String(seat.userId)}>
-              <div className="mb-1 flex items-center justify-between text-[9px]">
+              <div className="mb-1 flex items-center justify-between gap-1 text-[9px]">
                 <span className={i === currentIndex ? "font-semibold text-cyan-100" : "text-slate-400"}>{seat.name}</span>
-                <span className="font-mono text-slate-600">{seat.health}%</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-0.5 rounded border border-emerald-300/15 bg-emerald-300/[0.05] px-1 py-px font-mono text-[8px] text-emerald-300/80" title="Income per tick"><TrendingUp className="size-2" />+{incomeOf(seat)}</span>
+                  <span className="font-mono text-slate-600">{seat.health}%</span>
+                </span>
               </div>
               <GridLane player={seat} compact />
             </div>
