@@ -37,28 +37,30 @@ type UnitConfig = {
   speed: number;
   damage: number;
   tier: "budget" | "mid" | "endgame";
+  maxCharges: number;
+  rechargeMs: number;
   flying?: boolean;
   resistance?: "splash" | "slow" | "physical" | "all";
 };
 
 const UNIT_CONFIG: Record<string, UnitConfig> = {
   // ── Budget ──
-  soldier: { label: "Foot Soldier", cost: 5, income: 1, hp: 14, speed: 1.25, damage: 8, tier: "budget" },
-  scout: { label: "Scout", cost: 8, income: 1, hp: 8, speed: 1.8, damage: 5, tier: "budget" },
-  runner: { label: "Runner", cost: 12, income: 2, hp: 6, speed: 2.6, damage: 6, tier: "budget" },
-  grunt: { label: "Grunt", cost: 25, income: 5, hp: 30, speed: 0.8, damage: 12, tier: "budget", resistance: "splash" },
-  slinger: { label: "Slinger", cost: 35, income: 7, hp: 10, speed: 1.2, damage: 10, tier: "budget", flying: true },
+  soldier: { label: "Foot Soldier", cost: 5, income: 1, hp: 14, speed: 1.25, damage: 8, tier: "budget", maxCharges: 6, rechargeMs: 4_000 },
+  scout: { label: "Scout", cost: 8, income: 1, hp: 8, speed: 1.8, damage: 5, tier: "budget", maxCharges: 5, rechargeMs: 5_000 },
+  runner: { label: "Runner", cost: 12, income: 2, hp: 6, speed: 2.6, damage: 6, tier: "budget", maxCharges: 4, rechargeMs: 6_000 },
+  grunt: { label: "Grunt", cost: 25, income: 5, hp: 30, speed: 0.8, damage: 12, tier: "budget", maxCharges: 4, rechargeMs: 8_000, resistance: "splash" },
+  slinger: { label: "Slinger", cost: 35, income: 7, hp: 10, speed: 1.2, damage: 10, tier: "budget", maxCharges: 2, rechargeMs: 10_000, flying: true },
   // ── Mid-game ──
-  brute: { label: "Brute", cost: 120, income: 24, hp: 200, speed: 0.5, damage: 40, tier: "mid" },
-  raider: { label: "Raider", cost: 250, income: 50, hp: 80, speed: 2.0, damage: 25, tier: "mid", resistance: "slow" },
-  juggernaut: { label: "Juggernaut", cost: 500, income: 100, hp: 500, speed: 0.35, damage: 65, tier: "mid", resistance: "all" },
-  phantom: { label: "Phantom", cost: 350, income: 70, hp: 40, speed: 3.0, damage: 30, tier: "mid", flying: true },
+  brute: { label: "Brute", cost: 120, income: 24, hp: 200, speed: 0.5, damage: 40, tier: "mid", maxCharges: 3, rechargeMs: 14_000 },
+  raider: { label: "Raider", cost: 250, income: 50, hp: 80, speed: 2.0, damage: 25, tier: "mid", maxCharges: 2, rechargeMs: 16_000, resistance: "slow" },
+  juggernaut: { label: "Juggernaut", cost: 500, income: 100, hp: 500, speed: 0.35, damage: 65, tier: "mid", maxCharges: 2, rechargeMs: 22_000, resistance: "all" },
+  phantom: { label: "Phantom", cost: 350, income: 70, hp: 40, speed: 3.0, damage: 30, tier: "mid", maxCharges: 1, rechargeMs: 18_000, flying: true },
   // ── Endgame ──
-  siege_breaker: { label: "Siege Breaker", cost: 2000, income: 400, hp: 1200, speed: 0.3, damage: 120, tier: "endgame" },
-  leviathan: { label: "Leviathan", cost: 5000, income: 1000, hp: 3000, speed: 0.2, damage: 200, tier: "endgame", resistance: "splash" },
-  wraith_lord: { label: "Wraith Lord", cost: 8000, income: 1600, hp: 500, speed: 2.5, damage: 100, tier: "endgame", flying: true, resistance: "physical" },
-  titan: { label: "Titan", cost: 20000, income: 4000, hp: 8000, speed: 0.15, damage: 400, tier: "endgame", resistance: "all" },
-  doomsday: { label: "Doomsday", cost: 50000, income: 10000, hp: 15000, speed: 0.1, damage: 800, tier: "endgame" },
+  siege_breaker: { label: "Siege Breaker", cost: 2000, income: 400, hp: 1200, speed: 0.3, damage: 120, tier: "endgame", maxCharges: 2, rechargeMs: 30_000 },
+  leviathan: { label: "Leviathan", cost: 5000, income: 1000, hp: 3000, speed: 0.2, damage: 200, tier: "endgame", maxCharges: 1, rechargeMs: 42_000, resistance: "splash" },
+  wraith_lord: { label: "Wraith Lord", cost: 8000, income: 1600, hp: 500, speed: 2.5, damage: 100, tier: "endgame", maxCharges: 1, rechargeMs: 50_000, flying: true, resistance: "physical" },
+  titan: { label: "Titan", cost: 20000, income: 4000, hp: 8000, speed: 0.15, damage: 400, tier: "endgame", maxCharges: 1, rechargeMs: 55_000, resistance: "all" },
+  doomsday: { label: "Doomsday", cost: 50000, income: 10000, hp: 15000, speed: 0.1, damage: 800, tier: "endgame", maxCharges: 1, rechargeMs: 75_000 },
 
 } as const;
 
@@ -80,6 +82,7 @@ const TOWER_CONFIG = {
 const UPGRADE_COSTS = [75, 225, 600] as const;
 
 type Player = Doc<"games">["players"][number];
+type UnitCharge = NonNullable<Player["unitCharges"]>[number];
 type GridPoint = { x: number; y: number };
 type TowerLike = {
   x?: number;
@@ -124,11 +127,53 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function initialUnitCharges(now: number): UnitCharge[] {
+  return Object.entries(UNIT_CONFIG).map(([type, config]) => ({
+    type: type as UnitCharge["type"],
+    charges: config.maxCharges,
+    lastRechargeAt: now,
+  }));
+}
+
+function rechargeUnitCharges(charges: Player["unitCharges"], now: number): UnitCharge[] {
+  const current = charges ?? initialUnitCharges(now);
+  return current.map((entry) => {
+    const config = UNIT_CONFIG[entry.type];
+    if (!config || entry.charges >= config.maxCharges) {
+      return config ? { ...entry, charges: config.maxCharges, lastRechargeAt: now } : entry;
+    }
+    const elapsed = Math.max(0, now - entry.lastRechargeAt);
+    const recovered = Math.floor(elapsed / config.rechargeMs);
+    if (recovered <= 0) return entry;
+    const nextCharges = Math.min(config.maxCharges, entry.charges + recovered);
+    return {
+      ...entry,
+      charges: nextCharges,
+      lastRechargeAt: nextCharges >= config.maxCharges
+        ? now
+        : entry.lastRechargeAt + recovered * config.rechargeMs,
+    };
+  });
+}
+
+function consumeUnitCharge(charges: UnitCharge[], unitType: UnitCharge["type"], now: number) {
+  return charges.map((entry) => {
+    if (entry.type !== unitType) return entry;
+    const config = UNIT_CONFIG[entry.type];
+    return {
+      ...entry,
+      charges: Math.max(0, entry.charges - 1),
+      lastRechargeAt: entry.charges >= (config?.maxCharges ?? 1) ? now : entry.lastRechargeAt,
+    };
+  });
+}
+
 function normalizePlayer(player: Player) {
   return {
     ...player,
     gold: player.gold ?? STARTING_GOLD,
     income: player.income ?? BASE_INCOME,
+    unitCharges: player.unitCharges ?? initialUnitCharges(Date.now()),
     laneUnits: player.laneUnits ?? [],
     towers: player.towers ?? [],
     projectiles: player.projectiles ?? [],
@@ -148,6 +193,7 @@ function createPlayer(userId: Player["userId"], name: string, color: string) {
     defended: 0,
     gold: STARTING_GOLD,
     income: BASE_INCOME,
+    unitCharges: initialUnitCharges(Date.now()),
     laneUnits: [],
     towers: [],
     projectiles: [],
@@ -578,11 +624,13 @@ export const sendUnit = mutation({
     const index = game.players.findIndex((player) => player.userId === userId);
     if (index < 0) throw new Error("You are not in this room.");
 
+    const now = Date.now();
     const player = normalizePlayer(game.players[index]);
+    const unitCharges = rechargeUnitCharges(player.unitCharges, now);
     if (player.health <= 0) throw new Error("You have been eliminated and can only spectate.");
     if (game.players.filter((candidate) => candidate.health > 0).length <= 1) throw new Error("The match is over. You can only spectate.");
-    if (game.startedAt !== undefined && Date.now() - game.startedAt < ATTACK_DELAY_MS) {
-      const secondsLeft = Math.ceil((game.startedAt + ATTACK_DELAY_MS - Date.now()) / 1000);
+    if (game.startedAt !== undefined && now - game.startedAt < ATTACK_DELAY_MS) {
+      const secondsLeft = Math.ceil((game.startedAt + ATTACK_DELAY_MS - now) / 1000);
       throw new Error(`Attacks unlock in ${secondsLeft}s.`);
     }
     const targetIndex = Array.from({ length: game.players.length - 1 }, (_, offset) =>
@@ -592,6 +640,10 @@ export const sendUnit = mutation({
     const target = normalizePlayer(game.players[targetIndex]);
     const config = UNIT_CONFIG[args.unitType];
     if (!config) throw new Error("Unknown unit type.");
+    const charge = unitCharges.find((entry) => entry.type === args.unitType);
+    if (!charge || charge.charges <= 0) {
+      throw new Error(`${config.label} is recharging. Try again soon.`);
+    }
     if (player.gold < config.cost) throw new Error(`You need ${config.cost} gold for that unit.`);
 
     const spawn = spawnPointFor(target);
@@ -624,6 +676,7 @@ export const sendUnit = mutation({
           ...player,
           gold: player.gold - config.cost,
           income: player.income + config.income,
+          unitCharges: consumeUnitCharge(unitCharges, args.unitType, now),
           sent: player.sent + 1,
         };
       }
@@ -668,6 +721,7 @@ export const tick = mutation({
 
     const players = game.players.map((player) => {
       const state = normalizePlayer(player);
+      const refreshedUnitCharges = rechargeUnitCharges(state.unitCharges, now);
       const isBot = String(player.userId).startsWith("bot-");
 
       // Bot AI: auto-build and send units
@@ -675,6 +729,7 @@ export const tick = mutation({
       let botTowers = state.towers;
       let botIncome = state.income;
       let botSent = state.sent;
+      let botUnitCharges = refreshedUnitCharges;
 
       if (isPractice && isBot && state.health > 0) {
         // Bot builds a tower every ~15s if it has gold
@@ -689,18 +744,20 @@ export const tick = mutation({
         }
         // Bot sends a unit every ~8s
         if (attackUnlocked && Math.random() < 0.12) {
-          const types = ["soldier", "scout", "runner", "grunt"];
+          const types = ["soldier", "scout", "runner", "grunt"] as const;
           const pick = types[Math.floor(Math.random() * types.length)];
           const cfg = UNIT_CONFIG[pick];
-          if (botGold >= cfg.cost) {
-            botGold -= cfg.cost;
-            botIncome += cfg.income;
-            botSent += 1;
+          const charge = botUnitCharges.find((entry) => entry.type === pick);
+          if (botGold >= cfg.cost && charge && charge.charges > 0) {
             const humanPlayer = game.players[0];
             const humanState = normalizePlayer(humanPlayer);
             const spawn = spawnPointFor(humanState);
             const route = cfg.flying ? flyingPathFor(spawn.y) : findPath(humanState.towers, spawn);
             if (route) {
+              botGold -= cfg.cost;
+              botIncome += cfg.income;
+              botSent += 1;
+              botUnitCharges = consumeUnitCharge(botUnitCharges, pick, now);
               botPendingUnits.push({
                 id: createId(pick),
                 type: pick,
@@ -858,6 +915,7 @@ export const tick = mutation({
         ...state,
         gold: (isBot ? botGold : state.gold) + incomePayouts * (isBot ? botIncome : state.income) + killGold,
         income: isBot ? botIncome : state.income,
+        unitCharges: isBot ? botUnitCharges : refreshedUnitCharges,
         health: Math.max(0, state.health - leaked.reduce((total, unit) => total + (UNIT_CONFIG[unit.type]?.damage ?? 5), 0)),
         laneUnits: remainingUnits,
         incoming: remainingUnits.length,

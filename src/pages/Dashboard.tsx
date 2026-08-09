@@ -45,21 +45,21 @@ const MAGE_ELEMENT_INFO: Record<MageElement, { label: string; counter: string; i
   void: { label: "Void", counter: "pierces heavy resist", icon: Wand, text: "text-fuchsia-200", border: "border-fuchsia-300/40", background: "bg-fuchsia-300/10", glow: "shadow-[0_0_10px_2px_rgba(217,70,239,0.35)]" },
 };
 
-const UNIT_INFO: Record<UnitType, { short: string; cost: number; hp: number; income: number; tier: string; icon: typeof Footprints; flying?: boolean; resistance?: string }> = {
-  soldier: { short: "Foot Soldier", cost: 5, hp: 14, income: 1, tier: "budget", icon: Footprints },
-  scout: { short: "Scout", cost: 8, hp: 8, income: 1, tier: "budget", icon: Zap },
-  runner: { short: "Runner", cost: 12, hp: 6, income: 2, tier: "budget", icon: Bird },
-  grunt: { short: "Grunt", cost: 25, hp: 30, income: 5, tier: "budget", icon: Shield, resistance: "splash" },
-  slinger: { short: "Slinger", cost: 35, hp: 10, income: 7, tier: "budget", icon: Bird, flying: true },
-  brute: { short: "Brute", cost: 120, hp: 200, income: 24, tier: "mid", icon: Turtle },
-  raider: { short: "Raider", cost: 250, hp: 80, income: 50, tier: "mid", icon: Flame, resistance: "slow" },
-  juggernaut: { short: "Juggernaut", cost: 500, hp: 500, income: 100, tier: "mid", icon: Shield, resistance: "all" },
-  phantom: { short: "Phantom", cost: 350, hp: 40, income: 70, tier: "mid", icon: Ghost, flying: true },
-  siege_breaker: { short: "Siege Breaker", cost: 2000, hp: 1200, income: 400, tier: "endgame", icon: Castle },
-  leviathan: { short: "Leviathan", cost: 5000, hp: 3000, income: 1000, tier: "endgame", icon: Skull, resistance: "splash" },
-  wraith_lord: { short: "Wraith Lord", cost: 8000, hp: 500, income: 1600, tier: "endgame", icon: Ghost, flying: true, resistance: "physical" },
-  titan: { short: "Titan", cost: 20000, hp: 8000, income: 4000, tier: "endgame", icon: Castle, resistance: "all" },
-  doomsday: { short: "Doomsday", cost: 50000, hp: 15000, income: 10000, tier: "endgame", icon: Skull },
+const UNIT_INFO: Record<UnitType, { short: string; cost: number; hp: number; income: number; tier: string; maxCharges: number; rechargeSeconds: number; icon: typeof Footprints; flying?: boolean; resistance?: string }> = {
+  soldier: { short: "Foot Soldier", cost: 5, hp: 14, income: 1, tier: "budget", maxCharges: 6, rechargeSeconds: 4, icon: Footprints },
+  scout: { short: "Scout", cost: 8, hp: 8, income: 1, tier: "budget", maxCharges: 5, rechargeSeconds: 5, icon: Zap },
+  runner: { short: "Runner", cost: 12, hp: 6, income: 2, tier: "budget", maxCharges: 4, rechargeSeconds: 6, icon: Bird },
+  grunt: { short: "Grunt", cost: 25, hp: 30, income: 5, tier: "budget", maxCharges: 4, rechargeSeconds: 8, icon: Shield, resistance: "splash" },
+  slinger: { short: "Slinger", cost: 35, hp: 10, income: 7, tier: "budget", maxCharges: 2, rechargeSeconds: 10, icon: Bird, flying: true },
+  brute: { short: "Brute", cost: 120, hp: 200, income: 24, tier: "mid", maxCharges: 3, rechargeSeconds: 14, icon: Turtle },
+  raider: { short: "Raider", cost: 250, hp: 80, income: 50, tier: "mid", maxCharges: 2, rechargeSeconds: 16, icon: Flame, resistance: "slow" },
+  juggernaut: { short: "Juggernaut", cost: 500, hp: 500, income: 100, tier: "mid", maxCharges: 2, rechargeSeconds: 22, icon: Shield, resistance: "all" },
+  phantom: { short: "Phantom", cost: 350, hp: 40, income: 70, tier: "mid", maxCharges: 1, rechargeSeconds: 18, icon: Ghost, flying: true },
+  siege_breaker: { short: "Siege Breaker", cost: 2000, hp: 1200, income: 400, tier: "endgame", maxCharges: 2, rechargeSeconds: 30, icon: Castle },
+  leviathan: { short: "Leviathan", cost: 5000, hp: 3000, income: 1000, tier: "endgame", maxCharges: 1, rechargeSeconds: 42, icon: Skull, resistance: "splash" },
+  wraith_lord: { short: "Wraith Lord", cost: 8000, hp: 500, income: 1600, tier: "endgame", maxCharges: 1, rechargeSeconds: 50, icon: Ghost, flying: true, resistance: "physical" },
+  titan: { short: "Titan", cost: 20000, hp: 8000, income: 4000, tier: "endgame", maxCharges: 1, rechargeSeconds: 55, icon: Castle, resistance: "all" },
+  doomsday: { short: "Doomsday", cost: 50000, hp: 15000, income: 10000, tier: "endgame", maxCharges: 1, rechargeSeconds: 75, icon: Skull },
 };
 const UNIT_MAX_HP: Record<string, number> = Object.fromEntries(Object.entries(UNIT_INFO).map(([k, v]) => [k, v.hp]));
 
@@ -71,6 +71,19 @@ function incomeOf(player: Player) { return player.income ?? 30; }
 function unitsOf(player: Player) { return player.laneUnits ?? []; }
 function towersOf(player: Player) { return player.towers ?? []; }
 function projectilesOf(player: Player): Projectile[] { return player.projectiles ?? []; }
+function unitChargeInfo(player: Player, type: UnitType, clock: number) {
+  const info = UNIT_INFO[type];
+  const saved = player.unitCharges?.find((entry) => entry.type === type);
+  if (!saved) return { charges: info.maxCharges, nextSeconds: 0 };
+  const rechargeMs = info.rechargeSeconds * 1000;
+  const elapsed = Math.max(0, clock - saved.lastRechargeAt);
+  const charges = Math.min(info.maxCharges, saved.charges + Math.floor(elapsed / rechargeMs));
+  if (charges >= info.maxCharges) return { charges, nextSeconds: 0 };
+  return {
+    charges,
+    nextSeconds: Math.max(1, Math.ceil((rechargeMs - (elapsed % rechargeMs)) / 1000)),
+  };
+}
 function towerPoint(tower: NonNullable<Player["towers"]>[number]): GridPoint { return { x: tower.x ?? Math.round((tower.position / 100) * (GRID_WIDTH - 1)), y: tower.y ?? 5 }; }
 function unitPoint(unit: NonNullable<Player["laneUnits"]>[number]): GridPoint { return { x: unit.x ?? Math.round((unit.position / 100) * (GRID_WIDTH - 1)), y: unit.y ?? 5 }; }
 function pointKey(point: GridPoint) { return `${point.x}:${point.y}`; }
@@ -478,10 +491,9 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
   const [clock, setClock] = useState(() => Date.now());
 
   useEffect(() => {
-    if (room.startedAt === undefined) return;
     const timer = window.setInterval(() => setClock(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [room.startedAt]);
+  }, []);
 
   if (!player) return null;
   const gold = goldOf(player);
@@ -579,16 +591,19 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
             <div className="grid grid-cols-2 gap-1.5 max-h-[260px] overflow-y-auto">
               {tabUnits.map(([type, info]) => {
                 const Icon = info.icon;
+                const charge = unitChargeInfo(player, type, clock);
+                const hasCharge = charge.charges > 0;
                 return <button key={type} type="button" onClick={() => onSend(type)}
-                  disabled={!canSend || gold < info.cost || isBusy}
-                  className={`rounded-lg border p-2 text-left transition ${!canSend || gold < info.cost ? "border-white/3 bg-white/[0.01] opacity-30 cursor-not-allowed" : "border-white/6 bg-white/[0.02] hover:border-amber-300/30 hover:-translate-y-0.5"}`}>
+                  disabled={!canSend || gold < info.cost || isBusy || !hasCharge}
+                  className={`rounded-lg border p-2 text-left transition ${!canSend || gold < info.cost || !hasCharge ? "border-white/3 bg-white/[0.01] opacity-30 cursor-not-allowed" : "border-white/6 bg-white/[0.02] hover:border-amber-300/30 hover:-translate-y-0.5"}`}>
                   <div className="flex items-center justify-between">
                     <Icon className="size-3 text-amber-200" />
                     <span className="font-mono text-[9px] text-amber-200">{info.cost.toLocaleString()}g</span>
                   </div>
                   <p className="mt-0.5 text-[10px] font-medium text-white leading-tight">{info.short}</p>
                   <p className="text-[8px] text-slate-500">
-                    {info.hp}hp · +{info.income}/15s
+                    {info.hp}hp · +{info.income}/15s · {charge.charges}/{info.maxCharges} ready
+                    {charge.nextSeconds > 0 && ` · +1 in ${charge.nextSeconds}s`}
                     {info.flying && " · fly"}
                     {info.resistance && ` · ${info.resistance} res`}
                   </p>

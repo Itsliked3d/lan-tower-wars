@@ -32,6 +32,12 @@ const unitTypeValidator = v.union(
   v.literal("doomsday"),
 );
 
+const unitChargeValidator = v.object({
+  type: unitTypeValidator,
+  charges: v.number(),
+  lastRechargeAt: v.number(),
+});
+
 const towerTypeValidator = v.union(
   v.literal("close"),
   v.literal("far"),
@@ -111,6 +117,7 @@ const playerValidator = v.object({
   defended: v.number(),
   gold: v.optional(v.number()),
   income: v.optional(v.number()),
+  unitCharges: v.optional(v.array(unitChargeValidator)),
   laneUnits: v.optional(v.array(laneUnitValidator)),
   towers: v.optional(v.array(towerValidator)),
   projectiles: v.optional(v.array(projectileValidator)),
