@@ -353,7 +353,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onCopy, on
   const myTowers = towersOf(player);
   const selectedTower = selectedTowerId ? myTowers.find((t) => t.id === selectedTowerId) : null;
 
-  const tabUnits = Object.entries(UNIT_INFO).filter(([, info]) => info.tier === unitTab);
+  const tabUnits = (Object.entries(UNIT_INFO) as [UnitType, typeof UNIT_INFO[UnitType]][]).filter(([, info]) => info.tier === unitTab);
 
   return <div className="mx-auto w-full max-w-7xl space-y-4">
     {/* Top bar */}
