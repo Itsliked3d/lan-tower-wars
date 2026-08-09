@@ -45,7 +45,7 @@ const MAGE_ELEMENT_INFO: Record<MageElement, { label: string; counter: string; i
   void: { label: "Void", counter: "pierces heavy resist", icon: Wand, text: "text-fuchsia-200", border: "border-fuchsia-300/40", background: "bg-fuchsia-300/10", glow: "shadow-[0_0_10px_2px_rgba(217,70,239,0.35)]" },
 };
 
-const UNIT_INFO: Record<UnitType, { short: string; cost: number; hp: number; income: number; tier: string; maxCharges: number; rechargeSeconds: number; icon: typeof Footprints; flying?: boolean; resistance?: string; aura?: boolean; straightLine?: boolean; towerBreaker?: boolean }> = {
+const UNIT_INFO: Record<UnitType, { short: string; cost: number; hp: number; income: number; tier: "budget" | "mid" | "endgame"; maxCharges: number; rechargeSeconds: number; icon: typeof Footprints; flying?: boolean; resistance?: string; aura?: boolean; straightLine?: boolean; towerBreaker?: boolean }> = {
   soldier: { short: "Foot Soldier", cost: 5, hp: 14, income: 1, tier: "budget", maxCharges: 50, rechargeSeconds: 2, icon: Footprints },
   scout: { short: "Scout", cost: 8, hp: 8, income: 1, tier: "budget", maxCharges: 35, rechargeSeconds: 4, icon: Zap },
   runner: { short: "Runner", cost: 12, hp: 6, income: 2, tier: "budget", maxCharges: 25, rechargeSeconds: 5, icon: Bird },
@@ -63,6 +63,8 @@ const UNIT_INFO: Record<UnitType, { short: string; cost: number; hp: number; inc
   titan: { short: "Titan", cost: 20000, hp: 8000, income: 1000, tier: "endgame", maxCharges: 1, rechargeSeconds: 55, icon: Castle, resistance: "all" },
   doomsday: { short: "Doomsday", cost: 50000, hp: 15000, income: 2500, tier: "endgame", maxCharges: 1, rechargeSeconds: 75, icon: Skull },
 };
+const INCOME_RATE_BY_TIER = { budget: 20, mid: 10, endgame: 5 } as const;
+
 const UNIT_MAX_HP: Record<string, number> = Object.fromEntries(Object.entries(UNIT_INFO).map(([k, v]) => [k, v.hp]));
 
 const UPGRADE_COSTS = [75, 225, 600];
@@ -455,7 +457,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
       <div className="flex items-center gap-3">
         <div className="flex size-8 items-center justify-center rounded-lg bg-cyan-300/10"><Crosshair className="size-4 text-cyan-300" /></div>
         <div>
-          <span className="font-mono text-[11px] font-bold tracking-[0.15em] text-white">LAN TOWER WARS</span>
+          <span className="font-mono text-[11px] font-bold tracking-[0.15em] text-white">LAN TOWER WARS · V.1.0.2</span>
           <span className={`ml-2 rounded-md px-1.5 py-0.5 text-[9px] font-semibold ${room.isPractice ? "border border-amber-300/20 bg-amber-300/[0.08] text-amber-200" : "border border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200"}`}>{room.isPractice ? "PRACTICE" : "LIVE"}</span>
         </div>
       </div>
@@ -539,7 +541,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
                   </div>
                   <p className="mt-0.5 text-[10px] font-medium text-white leading-tight">{info.short}</p>
                   <p className="text-[8px] text-slate-500">
-                    {info.hp} Unit HP · +{info.income}/15s · {charge.charges}/{info.maxCharges} ready
+                    {info.hp} Unit HP · +{info.income}/15s · {INCOME_RATE_BY_TIER[info.tier]}% income · {charge.charges}/{info.maxCharges} ready
                     {charge.nextSeconds > 0 && ` · +1 in ${charge.nextSeconds}s`}
                     {info.flying && " · fly"}
                     {info.resistance && ` · ${info.resistance} res`}
@@ -552,7 +554,7 @@ function GameBoard({ room, currentUserId, onBuild, onSend, onUpgrade, onRemove, 
           </div>
 
           <div className="flex items-start gap-1.5 rounded-lg border border-amber-300/10 bg-amber-300/[0.03] p-2 text-[9px] text-amber-100/60">
-            <Coins className="mt-0.5 size-3 shrink-0 text-amber-300" />Income is paid in one burst every 15 seconds. Expensive units pay more.
+            <Coins className="mt-0.5 size-3 shrink-0 text-amber-300" />Income is paid every 15 seconds: budget units return 20%, mid-game 10%, and endgame 5% of their cost.
           </div>
           </div>
         </CardContent>
